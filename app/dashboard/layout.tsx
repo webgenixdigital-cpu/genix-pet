@@ -20,6 +20,7 @@ export default function DashboardLayout({
 
   const menu = [
     { href: '/dashboard', label: 'Início', icon: '🏠' },
+    { href: '/dashboard/agenda', label: 'Agenda', icon: '📅' },
     { href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️' },
     { href: '/dashboard/servicos', label: 'Serviços', icon: '🛁' },
     { href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️' },
