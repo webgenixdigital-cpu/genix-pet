@@ -9,30 +9,26 @@ type Agendamento = {
   fim: string
   status: string
   preco_cobrado: number | null
+  precisa_transporte: boolean
+  endereco_coleta: string | null
+  endereco_entrega: string | null
   customers: { nome: string; telefone: string } | null
   pets: { nome: string } | null
   professionals: { nome: string; cor_agenda: string } | null
   services: { nome: string } | null
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  agendado: 'Agendado',
-  confirmado: 'Confirmado',
-  em_espera: 'Em espera',
-  em_atendimento: 'Em atendimento',
-  concluido: 'Concluido',
-  cancelado: 'Cancelado',
-  faltou: 'Faltou',
-}
+const COLUNAS = [
+  { status: 'agendado', label: 'Agendado', cor: 'bg-gray-100' },
+  { status: 'confirmado', label: 'Confirmado', cor: 'bg-blue-100' },
+  { status: 'em_atendimento', label: 'Em atendimento', cor: 'bg-purple-100' },
+  { status: 'concluido', label: 'Concluido', cor: 'bg-green-100' },
+]
 
-const STATUS_CORES: Record<string, string> = {
-  agendado: 'bg-gray-100 text-gray-600',
-  confirmado: 'bg-blue-100 text-blue-600',
-  em_espera: 'bg-yellow-100 text-yellow-700',
-  em_atendimento: 'bg-purple-100 text-purple-600',
-  concluido: 'bg-green-100 text-green-600',
-  cancelado: 'bg-red-100 text-red-600',
-  faltou: 'bg-red-100 text-red-600',
+const PROXIMO_STATUS: Record<string, string> = {
+  agendado: 'confirmado',
+  confirmado: 'em_atendimento',
+  em_atendimento: 'concluido',
 }
 
 function formatarDataISO(data: Date): string {
@@ -53,7 +49,7 @@ export default function AgendaPage() {
     const { data } = await supabase
       .from('appointments')
       .select(`
-        id, inicio, fim, status, preco_cobrado,
+        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega,
         customers ( nome, telefone ),
         pets ( nome ),
         professionals ( nome, cor_agenda ),
@@ -62,6 +58,8 @@ export default function AgendaPage() {
       .eq('tenant_id', tenant.id)
       .gte('inicio', dataFiltro + 'T00:00:00')
       .lte('inicio', dataFiltro + 'T23:59:59')
+      .neq('status', 'cancelado')
+      .neq('status', 'faltou')
       .order('inicio')
 
     setAgendamentos((data as any) || [])
@@ -72,8 +70,15 @@ export default function AgendaPage() {
     carregarAgendamentos()
   }, [dataFiltro])
 
-  async function mudarStatus(id: string, novoStatus: string) {
-    await supabase.from('appointments').update({ status: novoStatus }).eq('id', id)
+  async function avancarStatus(id: string, statusAtual: string) {
+    const proximo = PROXIMO_STATUS[statusAtual]
+    if (!proximo) return
+    await supabase.from('appointments').update({ status: proximo }).eq('id', id)
+    carregarAgendamentos()
+  }
+
+  async function marcarFalta(id: string) {
+    await supabase.from('appointments').update({ status: 'faltou' }).eq('id', id)
     carregarAgendamentos()
   }
   return (
@@ -81,7 +86,7 @@ export default function AgendaPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Agenda</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Agendamentos do dia</p>
+          <p className="text-sm text-gray-500 mt-0.5">Fluxo de trabalho do dia</p>
         </div>
         <input
           type="date"
@@ -93,51 +98,79 @@ export default function AgendaPage() {
 
       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
-      ) : agendamentos.length === 0 ? (
-        <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center">
-          <p className="text-gray-400 text-sm">Nenhum agendamento para esta data.</p>
-        </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {agendamentos.map(a => (
-            <div key={a.id} className="bg-white border border-gray-100 rounded-xl p-4">
-              <div className="flex items-center gap-4">
-                <div className="text-sm font-medium text-gray-900 w-14 flex-shrink-0">
-                  {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+        <div className="grid grid-cols-4 gap-4">
+          {COLUNAS.map(coluna => {
+            const itens = agendamentos.filter(a => a.status === coluna.status)
+            return (
+              <div key={coluna.status} className="flex flex-col">
+                <div className={`${coluna.cor} rounded-lg px-3 py-2 mb-3 flex items-center justify-between`}>
+                  <span className="text-xs font-medium text-gray-700">{coluna.label}</span>
+                  <span className="text-xs text-gray-500 bg-white rounded-full w-5 h-5 flex items-center justify-center">
+                    {itens.length}
+                  </span>
                 </div>
 
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
-                  style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
-                >
-                  {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
-                </div>
+                <div className="flex flex-col gap-2">
+                  {itens.length === 0 && (
+                    <p className="text-xs text-gray-300 text-center py-6">Vazio</p>
+                  )}
 
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    {a.pets?.nome} — {a.services?.nome}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {a.customers?.nome} • {a.customers?.telefone} • {a.professionals?.nome}
-                  </p>
-                </div>
+                  {itens.map(a => (
+                    <div key={a.id} className="bg-white border border-gray-100 rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-gray-900">
+                          {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0"
+                          style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
+                        >
+                          {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
+                        </div>
+                      </div>
 
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_CORES[a.status]}`}>
-                  {STATUS_LABELS[a.status]}
-                </span>
+                      <p className="text-sm font-medium text-gray-900">{a.pets?.nome}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{a.services?.nome}</p>
+                      <p className="text-xs text-gray-400">{a.customers?.nome}</p>
 
-                <select
-                  value={a.status}
-                  onChange={e => mudarStatus(a.id, e.target.value)}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {Object.entries(STATUS_LABELS).map(([valor, label]) => (
-                    <option key={valor} value={valor}>{label}</option>
+                      {a.precisa_transporte && (
+                        <div className="mt-2 bg-orange-50 rounded-lg px-2 py-1.5">
+                          <p className="text-[10px] font-medium text-orange-700">🚐 Transporte</p>
+                          {a.endereco_coleta && (
+                            <button
+                              onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.endereco_coleta || '')}`, '_blank')}
+                              className="text-[10px] text-orange-600 mt-0.5 underline block text-left"
+                            >
+                              📍 Coleta: {a.endereco_coleta}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex gap-2 mt-3">
+                        {PROXIMO_STATUS[a.status] && (
+                          <button
+                            onClick={() => avancarStatus(a.id, a.status)}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
+                          >
+                            Avancar →
+                          </button>
+                        )}
+                        {a.status !== 'concluido' && (
+                          <button
+                            onClick={() => marcarFalta(a.id)}
+                            className="text-[11px] text-red-500 hover:underline px-2"
+                          >
+                            Faltou
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   ))}
-                </select>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

@@ -72,6 +72,34 @@ export default function AgendarPage() {
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false)
   const [erroAgendamento, setErroAgendamento] = useState('')
   const [agendamentoConfirmado, setAgendamentoConfirmado] = useState(false)
+  const [precisaTransporte, setPrecisaTransporte] = useState(false)
+  const [enderecoColeta, setEnderecoColeta] = useState('')
+  const [enderecoEntrega, setEnderecoEntrega] = useState('')
+  const [mesmoEndereco, setMesmoEndereco] = useState(true)
+  const [cepColeta, setCepColeta] = useState('')
+  const [buscandoCep, setBuscandoCep] = useState(false)
+
+  async function buscarCep(cep: string) {
+    const cepLimpo = cep.replace(/\D/g, '')
+    if (cepLimpo.length !== 8) return
+
+    setBuscandoCep(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`)
+      const data = await res.json()
+
+      if (!data.erro) {
+        const enderecoCompleto = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`
+        setEnderecoColeta(enderecoCompleto)
+        if (mesmoEndereco) {
+          setEnderecoEntrega(enderecoCompleto)
+        }
+      }
+    } catch {
+      // silencioso - usuario preenche manualmente se falhar
+    }
+    setBuscandoCep(false)
+  }
 
   async function buscarHorarios(data: string) {
     if (!tenant) return
@@ -231,6 +259,9 @@ export default function AgendarPage() {
         status: 'agendado',
         origem: 'online',
         preco_cobrado: servicoSelecionado.preco,
+        precisa_transporte: precisaTransporte,
+        endereco_coleta: precisaTransporte ? enderecoColeta : null,
+        endereco_entrega: precisaTransporte ? enderecoEntrega : null,
       })
 
     if (erroAgendamentoInsert) {
@@ -510,6 +541,79 @@ export default function AgendarPage() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+              <div className="border border-gray-200 rounded-lg p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={precisaTransporte}
+                    onChange={e => setPrecisaTransporte(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700">Preciso de transporte (leva e traz)</span>
+                </label>
+
+                {precisaTransporte && (
+                  <div className="flex flex-col gap-3 mt-3">
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">CEP</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={cepColeta}
+                          onChange={e => setCepColeta(e.target.value)}
+                          onBlur={e => buscarCep(e.target.value)}
+                          placeholder="37700-000"
+                          maxLength={9}
+                          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {buscandoCep && (
+                          <span className="text-xs text-gray-400 self-center">Buscando...</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">Endereco de coleta</label>
+                      <input
+                        type="text"
+                        value={enderecoColeta}
+                        onChange={e => {
+                          setEnderecoColeta(e.target.value)
+                          if (mesmoEndereco) setEnderecoEntrega(e.target.value)
+                        }}
+                        placeholder="Rua, numero, bairro"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={mesmoEndereco}
+                        onChange={e => {
+                          setMesmoEndereco(e.target.checked)
+                          if (e.target.checked) setEnderecoEntrega(enderecoColeta)
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-xs text-gray-600">Entregar no mesmo endereco</span>
+                    </label>
+
+                    {!mesmoEndereco && (
+                      <div>
+                        <label className="text-sm text-gray-600 mb-1 block">Endereco de entrega</label>
+                        <input
+                          type="text"
+                          value={enderecoEntrega}
+                          onChange={e => setEnderecoEntrega(e.target.value)}
+                          placeholder="Rua, numero, bairro"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {erroAgendamento && <p className="text-red-500 text-sm">{erroAgendamento}</p>}
