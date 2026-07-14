@@ -75,6 +75,8 @@ export default function AgendarPage() {
   const [precisaTransporte, setPrecisaTransporte] = useState(false)
   const [enderecoColeta, setEnderecoColeta] = useState('')
   const [enderecoEntrega, setEnderecoEntrega] = useState('')
+  const [ehRecorrente, setEhRecorrente] = useState(false)
+  const [frequenciaMensal, setFrequenciaMensal] = useState(1)
   const [mesmoEndereco, setMesmoEndereco] = useState(true)
   const [cepColeta, setCepColeta] = useState('')
   const [buscandoCep, setBuscandoCep] = useState(false)
@@ -246,7 +248,7 @@ export default function AgendarPage() {
     const inicio = new Date(`${dataSelecionada}T${horarioSelecionado}:00`)
     const fim = new Date(inicio.getTime() + servicoSelecionado.duracao_min * 60000)
 
-    const { error: erroAgendamentoInsert } = await supabase
+    const { data: agendamentoCriado, error: erroAgendamentoInsert } = await supabase
       .from('appointments')
       .insert({
         tenant_id: tenant.id,
@@ -262,12 +264,53 @@ export default function AgendarPage() {
         precisa_transporte: precisaTransporte,
         endereco_coleta: precisaTransporte ? enderecoColeta : null,
         endereco_entrega: precisaTransporte ? enderecoEntrega : null,
+        is_recorrente: ehRecorrente,
+        frequencia_mensal: ehRecorrente ? frequenciaMensal : null,
       })
+      .select('id')
+      .single()
 
-    if (erroAgendamentoInsert) {
-      setErroAgendamento('Erro ao criar agendamento: ' + erroAgendamentoInsert.message)
+    if (erroAgendamentoInsert || !agendamentoCriado) {
+      setErroAgendamento('Erro ao criar agendamento: ' + erroAgendamentoInsert?.message)
       setSalvandoAgendamento(false)
       return
+    }
+
+    if (ehRecorrente) {
+      const intervalosPorFrequencia: Record<number, number> = {
+        1: 30,
+        2: 14,
+        4: 7,
+      }
+      const intervaloDias = intervalosPorFrequencia[frequenciaMensal] || 30
+      const totalFuturos = 6
+      const futuros = []
+
+      for (let i = 1; i <= totalFuturos; i++) {
+        const proximoInicio = new Date(inicio.getTime() + intervaloDias * i * 24 * 60 * 60 * 1000)
+        const proximoFim = new Date(proximoInicio.getTime() + servicoSelecionado.duracao_min * 60000)
+
+        futuros.push({
+          tenant_id: tenant.id,
+          customer_id: clienteId,
+          pet_id: novoPet.id,
+          professional_id: profissionalId,
+          service_id: servicoSelecionado.id,
+          inicio: proximoInicio.toISOString(),
+          fim: proximoFim.toISOString(),
+          status: 'agendado',
+          origem: 'online',
+          preco_cobrado: servicoSelecionado.preco,
+          precisa_transporte: precisaTransporte,
+          endereco_coleta: precisaTransporte ? enderecoColeta : null,
+          endereco_entrega: precisaTransporte ? enderecoEntrega : null,
+          is_recorrente: true,
+          frequencia_mensal: frequenciaMensal,
+          recorrencia_pai_id: agendamentoCriado.id,
+        })
+      }
+
+      await supabase.from('appointments').insert(futuros)
     }
 
     setSalvandoAgendamento(false)
@@ -542,76 +585,44 @@ export default function AgendarPage() {
                   />
                 </div>
               </div>
+
               <div className="border border-gray-200 rounded-lg p-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={precisaTransporte}
-                    onChange={e => setPrecisaTransporte(e.target.checked)}
+                    checked={ehRecorrente}
+                    onChange={e => setEhRecorrente(e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm text-gray-700">Preciso de transporte (leva e traz)</span>
+                  <span className="text-sm text-gray-700">Quero agendamento recorrente</span>
                 </label>
 
-                {precisaTransporte && (
-                  <div className="flex flex-col gap-3 mt-3">
-                    <div>
-                      <label className="text-sm text-gray-600 mb-1 block">CEP</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={cepColeta}
-                          onChange={e => setCepColeta(e.target.value)}
-                          onBlur={e => buscarCep(e.target.value)}
-                          placeholder="37700-000"
-                          maxLength={9}
-                          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        {buscandoCep && (
-                          <span className="text-xs text-gray-400 self-center">Buscando...</span>
-                        )}
-                      </div>
+                {ehRecorrente && (
+                  <div className="mt-3">
+                    <label className="text-sm text-gray-600 mb-1 block">Frequencia</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { freq: 1, label: '1x/mes' },
+                        { freq: 2, label: '2x/mes' },
+                        { freq: 4, label: '4x/mes' },
+                      ].map(opcao => (
+                        <button
+                          key={opcao.freq}
+                          type="button"
+                          onClick={() => setFrequenciaMensal(opcao.freq)}
+                          className={`text-xs py-2 rounded-lg border transition-colors ${
+                            frequenciaMensal === opcao.freq
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                        >
+                          {opcao.label}
+                        </button>
+                      ))}
                     </div>
-
-                    <div>
-                      <label className="text-sm text-gray-600 mb-1 block">Endereco de coleta</label>
-                      <input
-                        type="text"
-                        value={enderecoColeta}
-                        onChange={e => {
-                          setEnderecoColeta(e.target.value)
-                          if (mesmoEndereco) setEnderecoEntrega(e.target.value)
-                        }}
-                        placeholder="Rua, numero, bairro"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={mesmoEndereco}
-                        onChange={e => {
-                          setMesmoEndereco(e.target.checked)
-                          if (e.target.checked) setEnderecoEntrega(enderecoColeta)
-                        }}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-xs text-gray-600">Entregar no mesmo endereco</span>
-                    </label>
-
-                    {!mesmoEndereco && (
-                      <div>
-                        <label className="text-sm text-gray-600 mb-1 block">Endereco de entrega</label>
-                        <input
-                          type="text"
-                          value={enderecoEntrega}
-                          onChange={e => setEnderecoEntrega(e.target.value)}
-                          placeholder="Rua, numero, bairro"
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    )}
+                    <p className="text-xs text-gray-400 mt-2">
+                      Seus proximos 6 agendamentos serao criados automaticamente
+                    </p>
                   </div>
                 )}
               </div>
@@ -626,6 +637,29 @@ export default function AgendarPage() {
                 {salvandoAgendamento ? 'Confirmando...' : 'Confirmar agendamento'}
               </button>
             </div>
+          </div>
+        )}
+
+        {agendamentoConfirmado && (
+          <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-green-600 text-xl">✓</span>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Agendamento confirmado!</h2>
+            <p className="text-sm text-gray-500">
+              {servicoSelecionado?.nome} para {nomePet}
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')} as {horarioSelecionado}
+            </p>
+            {ehRecorrente && (
+              <p className="text-xs text-blue-600 mt-2">
+                Seus proximos agendamentos recorrentes ja foram criados automaticamente!
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-4">
+              Em breve voce recebera uma confirmacao no telefone informado.
+            </p>
           </div>
         )}
         </div>
