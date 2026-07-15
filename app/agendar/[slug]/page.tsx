@@ -25,6 +25,18 @@ type Profissional = {
   nome: string
   cor_agenda: string
 }
+const RACAS_CACHORRO = [
+  'SRD (Sem Raca Definida)', 'Labrador', 'Golden Retriever', 'Poodle', 'Bulldog Frances',
+  'Pastor Alemao', 'Shih Tzu', 'Yorkshire', 'Pinscher', 'Chihuahua', 'Lhasa Apso',
+  'Maltes', 'Beagle', 'Rottweiler', 'Border Collie', 'Spitz Alemao (Lulu da Pomerania)',
+  'Dachshund (Salsicha)', 'Boxer', 'Pug', 'Cocker Spaniel', 'Schnauzer', 'Basset Hound',
+  'Husky Siberiano', 'Akita', 'Doberman', 'Fox Paulistinha', 'Outra',
+]
+
+const RACAS_GATO = [
+  'SRD (Sem Raca Definida)', 'Persa', 'Siames', 'Maine Coon', 'Angora', 'Sphynx',
+  'Bengal', 'Ragdoll', 'Munchkin', 'Outra',
+]
 function gerarHorarios(inicio: string, fim: string, duracaoMin: number): string[] {
   const horarios: string[] = []
   const [hIni, mIni] = inicio.split(':').map(Number)
@@ -68,7 +80,15 @@ export default function AgendarPage() {
   const [telefoneCliente, setTelefoneCliente] = useState('')
   const [nomePet, setNomePet] = useState('')
   const [portePet, setPortePet] = useState('medio')
+  const [especiePet, setEspeciePet] = useState('cachorro')
   const [racaPet, setRacaPet] = useState('')
+  const [sexoPet, setSexoPet] = useState('macho')
+  const [pelagemPet, setPelagemPet] = useState('curta')
+  const [castradoPet, setCastradoPet] = useState(false)
+  const [dataNascimentoPet, setDataNascimentoPet] = useState('')
+  const [dataVacinaPet, setDataVacinaPet] = useState('')
+  const [dataVermifugoPet, setDataVermifugoPet] = useState('')
+  const [dataAntipulgasPet, setDataAntipulgasPet] = useState('')
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false)
   const [erroAgendamento, setErroAgendamento] = useState('')
   const [agendamentoConfirmado, setAgendamentoConfirmado] = useState(false)
@@ -233,8 +253,16 @@ export default function AgendarPage() {
         tenant_id: tenant.id,
         customer_id: clienteId,
         nome: nomePet,
+        especie: especiePet,
         porte: portePet,
         raca: racaPet || null,
+        sexo: sexoPet,
+        pelagem: pelagemPet,
+        castrado: castradoPet,
+        data_nascimento: dataNascimentoPet || null,
+        data_ultima_vacina: dataVacinaPet || null,
+        data_ultima_vermifugacao: dataVermifugoPet || null,
+        data_ultimo_antipulgas: dataAntipulgasPet || null,
       })
       .select('id')
       .single()
@@ -561,6 +589,22 @@ export default function AgendarPage() {
 
               <div className="flex gap-3">
                 <div className="flex-1">
+                  <label className="text-sm text-gray-600 mb-1 block">Especie</label>
+                  <select
+                    value={especiePet}
+                    onChange={e => {
+                      setEspeciePet(e.target.value)
+                      setRacaPet('')
+                    }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="cachorro">Cachorro</option>
+                    <option value="gato">Gato</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+
+                <div className="flex-1">
                   <label className="text-sm text-gray-600 mb-1 block">Porte</label>
                   <select
                     value={portePet}
@@ -573,16 +617,101 @@ export default function AgendarPage() {
                     <option value="gigante">Gigante</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Raca</label>
+                <select
+                  value={racaPet}
+                  onChange={e => setRacaPet(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione...</option>
+                  {(especiePet === 'cachorro' ? RACAS_CACHORRO : especiePet === 'gato' ? RACAS_GATO : ['Outra']).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-sm text-gray-600 mb-1 block">Sexo</label>
+                  <select
+                    value={sexoPet}
+                    onChange={e => setSexoPet(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="macho">Macho</option>
+                    <option value="femea">Femea</option>
+                  </select>
+                </div>
 
                 <div className="flex-1">
-                  <label className="text-sm text-gray-600 mb-1 block">Raca (opcional)</label>
-                  <input
-                    type="text"
-                    value={racaPet}
-                    onChange={e => setRacaPet(e.target.value)}
-                    placeholder="SRD"
+                  <label className="text-sm text-gray-600 mb-1 block">Pelagem</label>
+                  <select
+                    value={pelagemPet}
+                    onChange={e => setPelagemPet(e.target.value)}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  >
+                    <option value="curta">Curta</option>
+                    <option value="longa">Longa</option>
+                  </select>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={castradoPet}
+                  onChange={e => setCastradoPet(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-gray-700">Castrado</span>
+              </label>
+
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Data de nascimento (opcional)</label>
+                <input
+                  type="date"
+                  value={dataNascimentoPet}
+                  onChange={e => setDataNascimentoPet(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-medium text-gray-500 mb-3 uppercase">Saude (opcional)</p>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-sm text-gray-600 mb-1 block">Ultima vacina</label>
+                    <input
+                      type="date"
+                      value={dataVacinaPet}
+                      onChange={e => setDataVacinaPet(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-600 mb-1 block">Ultima vermifugacao</label>
+                    <input
+                      type="date"
+                      value={dataVermifugoPet}
+                      onChange={e => setDataVermifugoPet(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-600 mb-1 block">Ultimo antipulgas</label>
+                    <input
+                      type="date"
+                      value={dataAntipulgasPet}
+                      onChange={e => setDataAntipulgasPet(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 
