@@ -341,6 +341,19 @@ export default function AgendarPage() {
       await supabase.from('appointments').insert(futuros)
     }
 
+    fetch('/api/notificar/confirmacao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: tenant.id,
+        telefone: telefoneCliente,
+        nomePet,
+        servico: servicoSelecionado.nome,
+        data: new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR'),
+        horario: horarioSelecionado,
+      }),
+    }).catch(() => {})
+
     setSalvandoAgendamento(false)
     setAgendamentoConfirmado(true)
   }

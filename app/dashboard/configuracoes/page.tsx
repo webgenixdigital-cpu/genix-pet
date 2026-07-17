@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase'
 
 const PLANOS = [
   { id: 'starter', nome: 'Starter', preco: 'R$ 89,90', desc: '1 profissional' },
@@ -10,6 +11,51 @@ const PLANOS = [
 
 export default function ConfiguracoesPage() {
   const [carregando, setCarregando] = useState<string | null>(null)
+  const [zapiInstanceId, setZapiInstanceId] = useState('')
+  const [zapiToken, setZapiToken] = useState('')
+  const [whatsappConectado, setWhatsappConectado] = useState(false)
+  const [salvandoWhatsapp, setSalvandoWhatsapp] = useState(false)
+  const supabase = createClient()
+
+  useEffect(() => {
+    async function carregarTenant() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from('tenants')
+        .select('zapi_instance_id, zapi_token, whatsapp_conectado')
+        .eq('email', user.email)
+        .single()
+
+      if (data) {
+        setZapiInstanceId(data.zapi_instance_id || '')
+        setZapiToken(data.zapi_token || '')
+        setWhatsappConectado(data.whatsapp_conectado || false)
+      }
+    }
+
+    carregarTenant()
+  }, [])
+
+  async function salvarWhatsapp() {
+    setSalvandoWhatsapp(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    await supabase
+      .from('tenants')
+      .update({
+        zapi_instance_id: zapiInstanceId,
+        zapi_token: zapiToken,
+        whatsapp_conectado: true,
+      })
+      .eq('email', user.email)
+
+    setWhatsappConectado(true)
+    setSalvandoWhatsapp(false)
+  }
 
   async function assinar(plano: string) {
     setCarregando(plano)
@@ -50,6 +96,51 @@ export default function ConfiguracoesPage() {
             </button>
           </div>
         ))}
+      </div>
+
+      <div className="mt-8 bg-white border border-gray-100 rounded-2xl p-5 max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-gray-900">WhatsApp</h3>
+          {whatsappConectado && (
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Conectado</span>
+          )}
+        </div>
+
+        <p className="text-xs text-gray-400 mb-4">
+          Cole os dados fornecidos pelo suporte para ativar os lembretes automaticos
+        </p>
+
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Instance ID</label>
+            <input
+              type="text"
+              value={zapiInstanceId}
+              onChange={e => setZapiInstanceId(e.target.value)}
+              placeholder="Fornecido pelo suporte"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Token</label>
+            <input
+              type="text"
+              value={zapiToken}
+              onChange={e => setZapiToken(e.target.value)}
+              placeholder="Fornecido pelo suporte"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <button
+            onClick={salvarWhatsapp}
+            disabled={salvandoWhatsapp}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {salvandoWhatsapp ? 'Salvando...' : 'Salvar e conectar'}
+          </button>
+        </div>
       </div>
     </div>
   )
