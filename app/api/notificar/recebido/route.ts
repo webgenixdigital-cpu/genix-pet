@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ enviado: false, motivo: 'WhatsApp nao conectado' })
   }
 
-  const mensagem = `Ola! Seu agendamento no ${tenant.nome} foi confirmado:\n\n🐾 Pet: ${nomePet}\n✂️ Servico: ${servico}\n📅 Data: ${data}\n🕐 Horario: ${horario}\n\nAte breve!`
+  const mensagem = `Ola! Recebemos seu pedido de agendamento no ${tenant.nome}:\n\n🐾 Pet: ${nomePet}\n✂️ Servico: ${servico}\n📅 Data: ${data}\n🕐 Horario: ${horario}\n\n⏳ Estamos analisando e em breve confirmaremos seu horario!`
 
   const resultado = await enviarWhatsApp(
     tenant.zapi_instance_id,
@@ -29,7 +29,5 @@ export async function POST(request: NextRequest) {
     mensagem
   )
 
-  console.log('Resultado Z-API:', JSON.stringify(resultado))
-
   return NextResponse.json(resultado)
-  }
+}

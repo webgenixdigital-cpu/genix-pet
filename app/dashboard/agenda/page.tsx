@@ -19,6 +19,7 @@ type Agendamento = {
 }
 
 const COLUNAS = [
+  { status: 'em_espera', label: 'Aguardando aprovacao', cor: 'bg-yellow-100' },
   { status: 'agendado', label: 'Agendado', cor: 'bg-gray-100' },
   { status: 'confirmado', label: 'Confirmado', cor: 'bg-blue-100' },
   { status: 'em_atendimento', label: 'Em atendimento', cor: 'bg-purple-100' },
@@ -26,6 +27,7 @@ const COLUNAS = [
 ]
 
 const PROXIMO_STATUS: Record<string, string> = {
+  em_espera: 'agendado',
   agendado: 'confirmado',
   confirmado: 'em_atendimento',
   em_atendimento: 'concluido',
@@ -81,6 +83,33 @@ export default function AgendaPage() {
     await supabase.from('appointments').update({ status: 'faltou' }).eq('id', id)
     carregarAgendamentos()
   }
+
+  async function aprovarAgendamento(agendamento: Agendamento) {
+    await supabase.from('appointments').update({ status: 'agendado' }).eq('id', agendamento.id)
+
+    const { data: tenant } = await supabase.from('tenants').select('id').single()
+    if (tenant) {
+      fetch('/api/notificar/confirmacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tenant.id,
+          telefone: agendamento.customers?.telefone,
+          nomePet: agendamento.pets?.nome,
+          servico: agendamento.services?.nome,
+          data: new Date(agendamento.inicio).toLocaleDateString('pt-BR'),
+          horario: new Date(agendamento.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        }),
+      }).catch(() => {})
+    }
+
+    carregarAgendamentos()
+  }
+
+  async function recusarAgendamento(id: string) {
+    await supabase.from('appointments').update({ status: 'cancelado' }).eq('id', id)
+    carregarAgendamentos()
+  }
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -99,7 +128,7 @@ export default function AgendaPage() {
       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
       ) : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           {COLUNAS.map(coluna => {
             const itens = agendamentos.filter(a => a.status === coluna.status)
             return (
@@ -148,21 +177,40 @@ export default function AgendaPage() {
                         </div>
                       )}
                       <div className="flex gap-2 mt-3">
-                        {PROXIMO_STATUS[a.status] && (
-                          <button
-                            onClick={() => avancarStatus(a.id, a.status)}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
-                          >
-                            Avancar →
-                          </button>
-                        )}
-                        {a.status !== 'concluido' && (
-                          <button
-                            onClick={() => marcarFalta(a.id)}
-                            className="text-[11px] text-red-500 hover:underline px-2"
-                          >
-                            Faltou
-                          </button>
+                        {a.status === 'em_espera' ? (
+                          <>
+                            <button
+                              onClick={() => aprovarAgendamento(a)}
+                              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
+                            >
+                              ✓ Aprovar
+                            </button>
+                            <button
+                              onClick={() => recusarAgendamento(a.id)}
+                              className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] py-1.5 rounded-lg transition-colors"
+                            >
+                              ✕ Recusar
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {PROXIMO_STATUS[a.status] && (
+                              <button
+                                onClick={() => avancarStatus(a.id, a.status)}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
+                              >
+                                Avancar →
+                              </button>
+                            )}
+                            {a.status !== 'concluido' && (
+                              <button
+                                onClick={() => marcarFalta(a.id)}
+                                className="text-[11px] text-red-500 hover:underline px-2"
+                              >
+                                Faltou
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

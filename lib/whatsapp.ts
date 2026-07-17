@@ -14,13 +14,15 @@ export async function enviarWhatsApp(
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-Token': process.env.ZAPI_CLIENT_TOKEN!,
+      },
       body: JSON.stringify({
         phone: telefoneComDDI,
         message: mensagem,
       }),
     })
-
     const data = await res.json()
     return { sucesso: true, data }
   } catch (error: any) {

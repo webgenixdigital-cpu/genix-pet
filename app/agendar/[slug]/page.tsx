@@ -286,7 +286,7 @@ export default function AgendarPage() {
         service_id: servicoSelecionado.id,
         inicio: inicio.toISOString(),
         fim: fim.toISOString(),
-        status: 'agendado',
+        status: 'em_espera',
         origem: 'online',
         preco_cobrado: servicoSelecionado.preco,
         precisa_transporte: precisaTransporte,
@@ -326,7 +326,7 @@ export default function AgendarPage() {
           service_id: servicoSelecionado.id,
           inicio: proximoInicio.toISOString(),
           fim: proximoFim.toISOString(),
-          status: 'agendado',
+          status: 'em_espera',
           origem: 'online',
           preco_cobrado: servicoSelecionado.preco,
           precisa_transporte: precisaTransporte,
@@ -341,7 +341,7 @@ export default function AgendarPage() {
       await supabase.from('appointments').insert(futuros)
     }
 
-    fetch('/api/notificar/confirmacao', {
+fetch('/api/notificar/recebido', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -784,10 +784,10 @@ export default function AgendarPage() {
 
         {agendamentoConfirmado && (
           <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-green-600 text-xl">✓</span>
+            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-yellow-600 text-xl">⏳</span>
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-1">Agendamento confirmado!</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Aguardando aprovacao</h2>
             <p className="text-sm text-gray-500">
               {servicoSelecionado?.nome} para {nomePet}
             </p>
@@ -796,11 +796,11 @@ export default function AgendarPage() {
             </p>
             {ehRecorrente && (
               <p className="text-xs text-blue-600 mt-2">
-                Seus proximos agendamentos recorrentes ja foram criados automaticamente!
+                Seus proximos agendamentos recorrentes tambem foram criados e aguardam aprovacao!
               </p>
             )}
             <p className="text-xs text-gray-400 mt-4">
-              Em breve voce recebera uma confirmacao no telefone informado.
+              O pet shop ira revisar seu pedido e confirmar em breve pelo WhatsApp.
             </p>
           </div>
         )}
