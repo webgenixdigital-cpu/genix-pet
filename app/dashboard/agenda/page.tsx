@@ -75,7 +75,28 @@ export default function AgendaPage() {
   async function avancarStatus(id: string, statusAtual: string) {
     const proximo = PROXIMO_STATUS[statusAtual]
     if (!proximo) return
+
     await supabase.from('appointments').update({ status: proximo }).eq('id', id)
+
+    if (proximo === 'concluido') {
+      const agendamento = agendamentos.find(a => a.id === id)
+      if (agendamento) {
+        const { data: tenant } = await supabase.from('tenants').select('id').single()
+        if (tenant) {
+          await supabase.from('financial_transactions').insert({
+            tenant_id: tenant.id,
+            tipo: 'receita',
+            categoria: 'Servico',
+            descricao: `${agendamento.services?.nome} - ${agendamento.pets?.nome}`,
+            valor: agendamento.preco_cobrado || 0,
+            data_lancamento: new Date().toISOString().split('T')[0],
+            status: 'pago',
+            appointment_id: id,
+          })
+        }
+      }
+    }
+
     carregarAgendamentos()
   }
 
