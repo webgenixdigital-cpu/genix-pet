@@ -23,9 +23,9 @@ export default function DashboardLayout({
     { href: '/dashboard/agenda', label: 'Agenda', icon: '📅' },
     { href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️' },
     { href: '/dashboard/servicos', label: 'Serviços', icon: '🛁' },
+    { href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰' },
     { href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️' },
   ]
-
   return (
     <div className="min-h-screen flex bg-gray-50">
       <aside className="w-56 bg-white border-r border-gray-100 flex flex-col">
