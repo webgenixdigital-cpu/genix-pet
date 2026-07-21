@@ -93,6 +93,35 @@ export default function AgendaPage() {
             status: 'pago',
             appointment_id: id,
           })
+
+          const { data: agendamentoCompleto } = await supabase
+            .from('appointments')
+            .select('professional_id, preco_cobrado')
+            .eq('id', id)
+            .single()
+
+          if (agendamentoCompleto?.professional_id) {
+            const { data: profissional } = await supabase
+              .from('professionals')
+              .select('percentual_comissao')
+              .eq('id', agendamentoCompleto.professional_id)
+              .single()
+
+            if (profissional && profissional.percentual_comissao > 0) {
+              const valorComissao = (agendamentoCompleto.preco_cobrado || 0) * (profissional.percentual_comissao / 100)
+
+              await supabase.from('commissions').insert({
+                tenant_id: tenant.id,
+                professional_id: agendamentoCompleto.professional_id,
+                appointment_id: id,
+                tipo_calculo: 'percentual',
+                percentual: profissional.percentual_comissao,
+                valor_base: agendamentoCompleto.preco_cobrado || 0,
+                valor_comissao: valorComissao,
+                status: 'pendente',
+              })
+            }
+          }
         }
       }
     }

@@ -2,7 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-
+type Comissao = {
+  id: string
+  valor_base: number
+  percentual: number
+  valor_comissao: number
+  status: string
+  professionals: { nome: string } | null
+}
 type Lancamento = {
   id: string
   tipo: string
@@ -29,6 +36,7 @@ function ultimoDiaDoMes(): string {
 
 export default function FinanceiroPage() {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([])
+  const [comissoes, setComissoes] = useState<Comissao[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
   const [tipo, setTipo] = useState('receita')
@@ -55,10 +63,16 @@ export default function FinanceiroPage() {
       .lte('data_lancamento', ultimoDiaDoMes())
       .order('data_lancamento', { ascending: false })
 
+    const { data: comissoesData } = await supabase
+      .from('commissions')
+      .select('id, valor_base, percentual, valor_comissao, status, professionals ( nome )')
+      .eq('tenant_id', tenant.id)
+      .order('criado_em', { ascending: false })
+
     setLancamentos(data || [])
+    setComissoes((comissoesData as any) || [])
     setCarregando(false)
   }
-
   useEffect(() => {
     carregarLancamentos()
   }, [])
@@ -167,6 +181,31 @@ export default function FinanceiroPage() {
               </p>
             </div>
           ))}
+        </div>
+      )}
+      {comissoes.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">Comissoes por profissional</h3>
+          <div className="flex flex-col gap-2">
+            {comissoes.map(c => (
+              <div key={c.id} className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-4">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">{c.professionals?.nome}</p>
+                  <p className="text-xs text-gray-400">
+                    {c.percentual}% de R$ {Number(c.valor_base).toFixed(2).replace('.', ',')}
+                  </p>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                  c.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {c.status === 'pago' ? 'Pago' : 'Pendente'}
+                </span>
+                <p className="text-sm font-medium text-gray-900">
+                  R$ {Number(c.valor_comissao).toFixed(2).replace('.', ',')}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

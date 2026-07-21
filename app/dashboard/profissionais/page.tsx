@@ -27,6 +27,7 @@ export default function ProfissionaisPage() {
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
   const [cor, setCor] = useState('#3b82f6')
+  const [percentualComissao, setPercentualComissao] = useState('0')
   const [especialidades, setEspecialidades] = useState<string[]>([])
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -88,6 +89,7 @@ export default function ProfissionaisPage() {
       especialidades,
       ativo: true,
       tem_acesso_sistema: false,
+      percentual_comissao: parseFloat(percentualComissao) || 0,
     })
 
     if (error) {
@@ -259,12 +261,13 @@ return (
                 </div>
               </div>
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">Cor na agenda</label>
+                <label className="text-sm text-gray-600 mb-1 block">Comissao (%)</label>
                 <input
-                  type="color"
-                  value={cor}
-                  onChange={e => setCor(e.target.value)}
-                  className="w-10 h-10 rounded cursor-pointer border border-gray-200"
+                  type="number"
+                  value={percentualComissao}
+                  onChange={e => setPercentualComissao(e.target.value)}
+                  placeholder="30"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               {erro && <p className="text-red-500 text-sm">{erro}</p>}
