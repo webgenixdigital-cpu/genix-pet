@@ -25,6 +25,11 @@ type Profissional = {
   nome: string
   cor_agenda: string
 }
+type Produto = {
+  id: string
+  nome: string
+  preco_venda: number
+}
 const RACAS_CACHORRO = [
   'SRD (Sem Raca Definida)', 'Labrador', 'Golden Retriever', 'Poodle', 'Bulldog Frances',
   'Pastor Alemao', 'Shih Tzu', 'Yorkshire', 'Pinscher', 'Chihuahua', 'Lhasa Apso',
@@ -66,6 +71,8 @@ export default function AgendarPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [servicos, setServicos] = useState<Servico[]>([])
   const [profissionais, setProfissionais] = useState<Profissional[]>([])
+  const [produtos, setProdutos] = useState<Produto[]>([])
+  const [produtosSelecionados, setProdutosSelecionados] = useState<string[]>([])
   const [carregando, setCarregando] = useState(true)
   const [naoEncontrado, setNaoEncontrado] = useState(false)
 
@@ -388,8 +395,16 @@ fetch('/api/notificar/recebido', {
         .eq('ativo', true)
         .order('nome')
 
+      const { data: produtosData } = await supabase
+        .from('products')
+        .select('id, nome, preco_venda')
+        .eq('tenant_id', tenantData.id)
+        .eq('ativo', true)
+        .order('nome')
+
       setServicos(servicosData || [])
       setProfissionais(profissionaisData || [])
+      setProdutos(produtosData || [])
       setCarregando(false)
     }
 
@@ -585,17 +600,6 @@ fetch('/api/notificar/recebido', {
                   value={telefoneCliente}
                   onChange={e => setTelefoneCliente(e.target.value)}
                   placeholder="(35) 99999-9999"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">Nome do pet</label>
-                <input
-                  type="text"
-                  value={nomePet}
-                  onChange={e => setNomePet(e.target.value)}
-                  placeholder="Rex"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

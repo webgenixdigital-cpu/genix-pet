@@ -93,6 +93,15 @@ export default function AgendaPage() {
             status: 'pago',
             appointment_id: id,
           })
+          fetch('/api/notificar/pet-pronto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: tenant.id,
+              telefone: agendamento.customers?.telefone,
+              nomePet: agendamento.pets?.nome,
+            }),
+          }).catch(() => {})
 
           const { data: agendamentoCompleto } = await supabase
             .from('appointments')

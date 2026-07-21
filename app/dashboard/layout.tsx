@@ -23,6 +23,7 @@ export default function DashboardLayout({
     { href: '/dashboard/agenda', label: 'Agenda', icon: '📅' },
     { href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️' },
     { href: '/dashboard/servicos', label: 'Serviços', icon: '🛁' },
+    { href: '/dashboard/produtos', label: 'Produtos', icon: '📦' },
     { href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰' },
     { href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️' },
   ]
