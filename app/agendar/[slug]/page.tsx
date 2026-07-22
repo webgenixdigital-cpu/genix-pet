@@ -98,6 +98,12 @@ export default function AgendarPage() {
   const [dataAntipulgasPet, setDataAntipulgasPet] = useState('')
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false)
   const [erroAgendamento, setErroAgendamento] = useState('')
+  const [clienteExistente, setClienteExistente] = useState<any>(null)
+  const [petsDoCliente, setPetsDoCliente] = useState<any[]>([])
+  const [petsExistentesSelecionados, setPetsExistentesSelecionados] = useState<string[]>([])
+  const [quererCadastrarNovoPet, setQuererCadastrarNovoPet] = useState(false)
+  const [buscandoCliente, setBuscandoCliente] = useState(false)
+  const [mostrarMaisInfo, setMostrarMaisInfo] = useState(false)
   const [agendamentoConfirmado, setAgendamentoConfirmado] = useState(false)
   const [precisaTransporte, setPrecisaTransporte] = useState(false)
   const [enderecoColeta, setEnderecoColeta] = useState('')
@@ -128,6 +134,29 @@ export default function AgendarPage() {
       // silencioso - usuario preenche manualmente se falhar
     }
     setBuscandoCep(false)
+  }
+  async function buscarClientePorTelefone(telefoneDigitado: string) {
+    if (!tenant || telefoneDigitado.replace(/\D/g, '').length < 10) return
+
+    setBuscandoCliente(true)
+
+    const { data: cliente } = await supabase
+      .from('customers')
+      .select('id, nome, telefone, pets ( id, nome, especie, porte, raca )')
+      .eq('tenant_id', tenant.id)
+      .eq('telefone', telefoneDigitado)
+      .maybeSingle()
+
+    if (cliente) {
+      setClienteExistente(cliente)
+      setNomeCliente(cliente.nome)
+      setPetsDoCliente((cliente as any).pets || [])
+    } else {
+      setClienteExistente(null)
+      setPetsDoCliente([])
+    }
+
+    setBuscandoCliente(false)
   }
 
   async function buscarHorarios(data: string) {
@@ -254,56 +283,83 @@ export default function AgendarPage() {
       clienteId = novoCliente.id
     }
 
-    const { data: novoPet, error: erroPet } = await supabase
-      .from('pets')
-      .insert({
-        tenant_id: tenant.id,
-        customer_id: clienteId,
-        nome: nomePet,
-        especie: especiePet,
-        porte: portePet,
-        raca: racaPet || null,
-        sexo: sexoPet,
-        pelagem: pelagemPet,
-        castrado: castradoPet,
-        data_nascimento: dataNascimentoPet || null,
-        data_ultima_vacina: dataVacinaPet || null,
-        data_ultima_vermifugacao: dataVermifugoPet || null,
-        data_ultimo_antipulgas: dataAntipulgasPet || null,
-      })
-      .select('id')
-      .single()
+    const idsDosPets: string[] = [...petsExistentesSelecionados]
 
-    if (erroPet || !novoPet) {
-      setErroAgendamento('Erro ao cadastrar pet: ' + erroPet?.message)
+    if (quererCadastrarNovoPet || petsDoCliente.length === 0) {
+      const { data: novoPet, error: erroPet } = await supabase
+        .from('pets')
+        .insert({
+          tenant_id: tenant.id,
+          customer_id: clienteId,
+          nome: nomePet,
+          especie: especiePet,
+          porte: portePet,
+          raca: racaPet || null,
+          sexo: sexoPet,
+          pelagem: pelagemPet,
+          castrado: castradoPet,
+          data_nascimento: dataNascimentoPet || null,
+          data_ultima_vacina: dataVacinaPet || null,
+          data_ultima_vermifugacao: dataVermifugoPet || null,
+          data_ultimo_antipulgas: dataAntipulgasPet || null,
+        })
+        .select('id')
+        .single()
+
+      if (erroPet || !novoPet) {
+        setErroAgendamento('Erro ao cadastrar pet: ' + erroPet?.message)
+        setSalvandoAgendamento(false)
+        return
+      }
+
+      idsDosPets.push(novoPet.id)
+    }
+
+    if (idsDosPets.length === 0) {
+      setErroAgendamento('Selecione ao menos um pet.')
       setSalvandoAgendamento(false)
       return
     }
+    const duracaoMs = servicoSelecionado.duracao_min * 60000
+    const agendamentosCriadosIds: string[] = []
+    let erroCriacao = ''
 
-    const inicio = new Date(`${dataSelecionada}T${horarioSelecionado}:00`)
-    const fim = new Date(inicio.getTime() + servicoSelecionado.duracao_min * 60000)
+    for (let i = 0; i < idsDosPets.length; i++) {
+      const inicio = new Date(new Date(`${dataSelecionada}T${horarioSelecionado}:00`).getTime() + duracaoMs * i)
+      const fim = new Date(inicio.getTime() + duracaoMs)
 
-    const { data: agendamentoCriado, error: erroAgendamentoInsert } = await supabase
-      .from('appointments')
-      .insert({
-        tenant_id: tenant.id,
-        customer_id: clienteId,
-        pet_id: novoPet.id,
-        professional_id: profissionalId,
-        service_id: servicoSelecionado.id,
-        inicio: inicio.toISOString(),
-        fim: fim.toISOString(),
-        status: 'em_espera',
-        origem: 'online',
-        preco_cobrado: servicoSelecionado.preco,
-        precisa_transporte: precisaTransporte,
-        endereco_coleta: precisaTransporte ? enderecoColeta : null,
-        endereco_entrega: precisaTransporte ? enderecoEntrega : null,
-        is_recorrente: ehRecorrente,
-        frequencia_mensal: ehRecorrente ? frequenciaMensal : null,
-      })
-      .select('id')
-      .single()
+      const { data: agendamentoCriadoLoop, error: erroLoop } = await supabase
+        .from('appointments')
+        .insert({
+          tenant_id: tenant.id,
+          customer_id: clienteId,
+          pet_id: idsDosPets[i],
+          professional_id: profissionalId,
+          service_id: servicoSelecionado.id,
+          inicio: inicio.toISOString(),
+          fim: fim.toISOString(),
+          status: 'em_espera',
+          origem: 'online',
+          preco_cobrado: servicoSelecionado.preco,
+          precisa_transporte: precisaTransporte,
+          endereco_coleta: precisaTransporte ? enderecoColeta : null,
+          endereco_entrega: precisaTransporte ? enderecoEntrega : null,
+          is_recorrente: ehRecorrente,
+          frequencia_mensal: ehRecorrente ? frequenciaMensal : null,
+        })
+        .select('id')
+        .single()
+
+      if (erroLoop || !agendamentoCriadoLoop) {
+        erroCriacao = erroLoop?.message || 'Erro desconhecido'
+        break
+      }
+
+      agendamentosCriadosIds.push(agendamentoCriadoLoop.id)
+    }
+
+    const agendamentoCriado = agendamentosCriadosIds[0] ? { id: agendamentosCriadosIds[0] } : null
+    const erroAgendamentoInsert = erroCriacao ? { message: erroCriacao } : null
 
     if (erroAgendamentoInsert || !agendamentoCriado) {
       setErroAgendamento('Erro ao criar agendamento: ' + erroAgendamentoInsert?.message)
@@ -322,13 +378,14 @@ export default function AgendarPage() {
       const futuros = []
 
       for (let i = 1; i <= totalFuturos; i++) {
-        const proximoInicio = new Date(inicio.getTime() + intervaloDias * i * 24 * 60 * 60 * 1000)
+        const inicioBase = new Date(`${dataSelecionada}T${horarioSelecionado}:00`)
+        const proximoInicio = new Date(inicioBase.getTime() + intervaloDias * i * 24 * 60 * 60 * 1000)
         const proximoFim = new Date(proximoInicio.getTime() + servicoSelecionado.duracao_min * 60000)
 
         futuros.push({
           tenant_id: tenant.id,
           customer_id: clienteId,
-          pet_id: novoPet.id,
+          pet_id: idsDosPets[0],
           professional_id: profissionalId,
           service_id: servicoSelecionado.id,
           inicio: proximoInicio.toISOString(),
@@ -583,154 +640,218 @@ fetch('/api/notificar/recebido', {
 
             <div className="flex flex-col gap-4">
               <div>
+                <label className="text-sm text-gray-600 mb-1 block">Seu telefone</label>
+                <input
+                  type="text"
+                  value={telefoneCliente}
+                  onChange={e => setTelefoneCliente(e.target.value)}
+                  onBlur={e => buscarClientePorTelefone(e.target.value)}
+                  placeholder="(35) 99999-9999"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {buscandoCliente && <p className="text-xs text-gray-400 mt-1">Verificando...</p>}
+                {clienteExistente && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Bem-vindo de volta, {clienteExistente.nome}! 🐾
+                  </p>
+                )}
+              </div>
+
+              <div>
                 <label className="text-sm text-gray-600 mb-1 block">Seu nome</label>
                 <input
                   type="text"
                   value={nomeCliente}
                   onChange={e => setNomeCliente(e.target.value)}
                   placeholder="Maria Silva"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={!!clienteExistente}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
                 />
               </div>
 
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">Seu telefone</label>
-                <input
-                  type="text"
-                  value={telefoneCliente}
-                  onChange={e => setTelefoneCliente(e.target.value)}
-                  placeholder="(35) 99999-9999"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-sm text-gray-600 mb-1 block">Especie</label>
-                  <select
-                    value={especiePet}
-                    onChange={e => {
-                      setEspeciePet(e.target.value)
-                      setRacaPet('')
-                    }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="cachorro">Cachorro</option>
-                    <option value="gato">Gato</option>
-                    <option value="outro">Outro</option>
-                  </select>
+              {petsDoCliente.length > 0 && (
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">Quais pets vao? (pode escolher mais de um)</label>
+                  <div className="flex flex-col gap-2">
+                    {petsDoCliente.map(p => (
+                      <label key={p.id} className="flex items-center gap-2 border border-gray-200 rounded-lg p-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={petsExistentesSelecionados.includes(p.id)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setPetsExistentesSelecionados(prev => [...prev, p.id])
+                            } else {
+                              setPetsExistentesSelecionados(prev => prev.filter(id => id !== p.id))
+                            }
+                          }}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm text-gray-700">{p.nome}</span>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setQuererCadastrarNovoPet(!quererCadastrarNovoPet)}
+                      className="text-xs text-blue-600 hover:underline text-left mt-1"
+                    >
+                      {quererCadastrarNovoPet ? '- Cancelar novo pet' : '+ Cadastrar um pet novo'}
+                    </button>
+                  </div>
                 </div>
+              )}
 
-                <div className="flex-1">
-                  <label className="text-sm text-gray-600 mb-1 block">Porte</label>
-                  <select
-                    value={portePet}
-                    onChange={e => setPortePet(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="pequeno">Pequeno</option>
-                    <option value="medio">Medio</option>
-                    <option value="grande">Grande</option>
-                    <option value="gigante">Gigante</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">Raca</label>
-                <select
-                  value={racaPet}
-                  onChange={e => setRacaPet(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Selecione...</option>
-                  {(especiePet === 'cachorro' ? RACAS_CACHORRO : especiePet === 'gato' ? RACAS_GATO : ['Outra']).map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-sm text-gray-600 mb-1 block">Sexo</label>
-                  <select
-                    value={sexoPet}
-                    onChange={e => setSexoPet(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="macho">Macho</option>
-                    <option value="femea">Femea</option>
-                  </select>
-                </div>
-
-                <div className="flex-1">
-                  <label className="text-sm text-gray-600 mb-1 block">Pelagem</label>
-                  <select
-                    value={pelagemPet}
-                    onChange={e => setPelagemPet(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="curta">Curta</option>
-                    <option value="longa">Longa</option>
-                  </select>
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={castradoPet}
-                  onChange={e => setCastradoPet(e.target.checked)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm text-gray-700">Castrado</span>
-              </label>
-
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">Data de nascimento (opcional)</label>
-                <input
-                  type="date"
-                  value={dataNascimentoPet}
-                  onChange={e => setDataNascimentoPet(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="border-t border-gray-100 pt-4">
-                <p className="text-xs font-medium text-gray-500 mb-3 uppercase">Saude (opcional)</p>
-
-                <div className="flex flex-col gap-3">
+              {(petsDoCliente.length === 0 || quererCadastrarNovoPet) && (
+                <>
                   <div>
-                    <label className="text-sm text-gray-600 mb-1 block">Ultima vacina</label>
+                    <label className="text-sm text-gray-600 mb-1 block">Nome do pet</label>
                     <input
-                      type="date"
-                      value={dataVacinaPet}
-                      onChange={e => setDataVacinaPet(e.target.value)}
+                      type="text"
+                      value={nomePet}
+                      onChange={e => setNomePet(e.target.value)}
+                      placeholder="Rex"
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
-                  <div>
-                    <label className="text-sm text-gray-600 mb-1 block">Ultima vermifugacao</label>
-                    <input
-                      type="date"
-                      value={dataVermifugoPet}
-                      onChange={e => setDataVermifugoPet(e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-600 mb-1 block">Especie</label>
+                      <select
+                        value={especiePet}
+                        onChange={e => { setEspeciePet(e.target.value); setRacaPet('') }}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="cachorro">Cachorro</option>
+                        <option value="gato">Gato</option>
+                        <option value="outro">Outro</option>
+                      </select>
+                    </div>
+
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-600 mb-1 block">Porte</label>
+                      <select
+                        value={portePet}
+                        onChange={e => setPortePet(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="pequeno">Pequeno</option>
+                        <option value="medio">Medio</option>
+                        <option value="grande">Grande</option>
+                        <option value="gigante">Gigante</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-600 mb-1 block">Ultimo antipulgas</label>
-                    <input
-                      type="date"
-                      value={dataAntipulgasPet}
-                      onChange={e => setDataAntipulgasPet(e.target.value)}
+                    <label className="text-sm text-gray-600 mb-1 block">Raca</label>
+                    <select
+                      value={racaPet}
+                      onChange={e => setRacaPet(e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    >
+                      <option value="">Selecione...</option>
+                      {(especiePet === 'cachorro' ? RACAS_CACHORRO : especiePet === 'gato' ? RACAS_GATO : ['Outra']).map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setMostrarMaisInfo(!mostrarMaisInfo)}
+                    className="text-xs text-blue-600 hover:underline text-left"
+                  >
+                    {mostrarMaisInfo ? '- Ocultar informacoes adicionais' : '+ Adicionar mais informacoes (opcional)'}
+                  </button>
+
+                  {mostrarMaisInfo && (
+                    <>
+                      <div className="flex gap-3">
+                        <div className="flex-1">
+                          <label className="text-sm text-gray-600 mb-1 block">Sexo</label>
+                          <select
+                            value={sexoPet}
+                            onChange={e => setSexoPet(e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="macho">Macho</option>
+                            <option value="femea">Femea</option>
+                          </select>
+                        </div>
+
+                        <div className="flex-1">
+                          <label className="text-sm text-gray-600 mb-1 block">Pelagem</label>
+                          <select
+                            value={pelagemPet}
+                            onChange={e => setPelagemPet(e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="curta">Curta</option>
+                            <option value="longa">Longa</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={castradoPet}
+                          onChange={e => setCastradoPet(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm text-gray-700">Castrado</span>
+                      </label>
+
+                      <div>
+                        <label className="text-sm text-gray-600 mb-1 block">Data de nascimento</label>
+                        <input
+                          type="date"
+                          value={dataNascimentoPet}
+                          onChange={e => setDataNascimentoPet(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div className="border-t border-gray-100 pt-4">
+                        <p className="text-xs font-medium text-gray-500 mb-3 uppercase">Saude</p>
+
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <label className="text-sm text-gray-600 mb-1 block">Ultima vacina</label>
+                            <input
+                              type="date"
+                              value={dataVacinaPet}
+                              onChange={e => setDataVacinaPet(e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-sm text-gray-600 mb-1 block">Ultima vermifugacao</label>
+                            <input
+                              type="date"
+                              value={dataVermifugoPet}
+                              onChange={e => setDataVermifugoPet(e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-sm text-gray-600 mb-1 block">Ultimo antipulgas</label>
+                            <input
+                              type="date"
+                              value={dataAntipulgasPet}
+                              onChange={e => setDataAntipulgasPet(e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
 
               <div className="border border-gray-200 rounded-lg p-3">
                 <label className="flex items-center gap-2 cursor-pointer">

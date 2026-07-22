@@ -83,16 +83,34 @@ export default function AgendaPage() {
       if (agendamento) {
         const { data: tenant } = await supabase.from('tenants').select('id').single()
         if (tenant) {
-          await supabase.from('financial_transactions').insert({
-            tenant_id: tenant.id,
-            tipo: 'receita',
-            categoria: 'Servico',
-            descricao: `${agendamento.services?.nome} - ${agendamento.pets?.nome}`,
-            valor: agendamento.preco_cobrado || 0,
-            data_lancamento: new Date().toISOString().split('T')[0],
-            status: 'pago',
-            appointment_id: id,
-          })
+          const { data: pacoteAtivo } = await supabase
+            .from('customer_packages')
+            .select('id, package_id, sessoes_restantes, service_packages ( service_id )')
+            .eq('customer_id', agendamento.customers ? (agendamento as any).customer_id : null)
+            .eq('status', 'ativo')
+            .gt('sessoes_restantes', 0)
+
+          const pacoteCompativel = (pacoteAtivo as any)?.find(
+            (pc: any) => pc.service_packages?.service_id === (agendamento as any).service_id
+          )
+
+          if (pacoteCompativel) {
+            await supabase.from('package_usage').insert({
+              customer_package_id: pacoteCompativel.id,
+              appointment_id: id,
+            })
+          } else {
+            await supabase.from('financial_transactions').insert({
+              tenant_id: tenant.id,
+              tipo: 'receita',
+              categoria: 'Servico',
+              descricao: `${agendamento.services?.nome} - ${agendamento.pets?.nome}`,
+              valor: agendamento.preco_cobrado || 0,
+              data_lancamento: new Date().toISOString().split('T')[0],
+              status: 'pago',
+              appointment_id: id,
+            })
+          }
           fetch('/api/notificar/pet-pronto', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
