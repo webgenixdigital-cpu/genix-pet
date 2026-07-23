@@ -25,6 +25,7 @@ export default function DashboardLayout({
     { href: '/dashboard/servicos', label: 'Serviços', icon: '🛁' },
     { href: '/dashboard/produtos', label: 'Produtos', icon: '📦' },
     { href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁' },
+    { href: '/dashboard/clientes', label: 'Clientes', icon: '👥' },
     { href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰' },
     { href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️' },
   ]

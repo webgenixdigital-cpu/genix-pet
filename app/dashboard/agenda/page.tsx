@@ -12,6 +12,8 @@ type Agendamento = {
   precisa_transporte: boolean
   endereco_coleta: string | null
   endereco_entrega: string | null
+  customer_id: string
+  service_id: string
   customers: { nome: string; telefone: string } | null
   pets: { nome: string } | null
   professionals: { nome: string; cor_agenda: string } | null
@@ -51,7 +53,7 @@ export default function AgendaPage() {
     const { data } = await supabase
       .from('appointments')
       .select(`
-        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega,
+        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id,
         customers ( nome, telefone ),
         pets ( nome ),
         professionals ( nome, cor_agenda ),

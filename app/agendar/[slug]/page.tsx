@@ -218,7 +218,9 @@ export default function AgendarPage() {
   async function confirmarAgendamento() {
     setErroAgendamento('')
 
-    if (!nomeCliente || !telefoneCliente || !nomePet) {
+    const precisaNomePet = quererCadastrarNovoPet || petsDoCliente.length === 0
+
+    if (!nomeCliente || !telefoneCliente || (precisaNomePet && !nomePet)) {
       setErroAgendamento('Preencha todos os campos obrigatorios.')
       return
     }

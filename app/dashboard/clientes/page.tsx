@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 type Cliente = {
   id: string
   nome: string
   telefone: string
+  cpf: string | null
   pets: { id: string; nome: string }[]
 }
 
@@ -19,7 +21,9 @@ type Pacote = {
 }
 
 export default function ClientesPage() {
+  const router = useRouter()
   const [clientes, setClientes] = useState<Cliente[]>([])
+  const [busca, setBusca] = useState('')  
   const [pacotes, setPacotes] = useState<Pacote[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modalVenda, setModalVenda] = useState<Cliente | null>(null)
@@ -36,7 +40,7 @@ export default function ClientesPage() {
 
     const { data: clientesData } = await supabase
       .from('customers')
-      .select('id, nome, telefone, pets ( id, nome )')
+      .select('id, nome, telefone, cpf, pets ( id, nome )')
       .eq('tenant_id', tenant.id)
       .eq('ativo', true)
       .order('nome')
@@ -110,6 +114,16 @@ export default function ClientesPage() {
     setSalvando(false)
     setModalVenda(null)
   }
+  const buscaLower = busca.trim().toLowerCase()
+  const clientesFiltrados = buscaLower
+    ? clientes.filter(c =>
+        c.nome.toLowerCase().includes(buscaLower) ||
+        c.telefone.includes(buscaLower) ||
+        (c.cpf || '').toLowerCase().includes(buscaLower) ||
+        c.pets.some(p => p.nome.toLowerCase().includes(buscaLower))
+      )
+    : clientes
+
   return (
     <div>
       <div className="mb-6">
@@ -117,16 +131,28 @@ export default function ClientesPage() {
         <p className="text-sm text-gray-500 mt-0.5">Clientes cadastrados e venda de pacotes</p>
       </div>
 
+      <input
+        type="text"
+        value={busca}
+        onChange={e => setBusca(e.target.value)}
+        placeholder="Buscar por nome, telefone, CPF ou nome do pet..."
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
-      ) : clientes.length === 0 ? (
+      ) : clientesFiltrados.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center">
           <p className="text-gray-400 text-sm">Nenhum cliente cadastrado ainda.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {clientes.map(c => (
-            <div key={c.id} className="bg-white border border-gray-100 rounded-xl p-4 flex items-center gap-4">
+          {clientesFiltrados.map(c => (
+            <div
+              key={c.id}
+              onClick={() => router.push(`/dashboard/clientes/${c.id}`)}
+              className="bg-white border border-gray-100 rounded-xl p-4 flex items-center gap-4 cursor-pointer hover:border-blue-300 transition-colors"
+            >
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">{c.nome}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -135,7 +161,10 @@ export default function ClientesPage() {
               </div>
               {pacotes.length > 0 && c.pets.length > 0 && (
                 <button
-                  onClick={() => abrirVenda(c)}
+                  onClick={e => {
+                    e.stopPropagation()
+                    abrirVenda(c)
+                  }}
                   className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
                 >
                   Vender pacote
