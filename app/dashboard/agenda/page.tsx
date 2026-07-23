@@ -196,13 +196,18 @@ export default function AgendaPage() {
           <h2 className="text-xl font-semibold text-gray-900">Agenda</h2>
           <p className="text-sm text-gray-500 mt-0.5">Fluxo de trabalho do dia</p>
         </div>
+        <div className="flex items-center gap-3">
         <input
           type="date"
           value={dataFiltro}
           onChange={e => setDataFiltro(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <a href="/dashboard/agenda/novo" className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+          + Novo agendamento
+        </a>
       </div>
+    </div>
 
       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
