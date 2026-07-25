@@ -498,9 +498,14 @@ fetch('/api/notificar/recebido', {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-100 py-6 px-4">
-        <div className="max-w-lg mx-auto">
-          <h1 className="text-xl font-semibold text-gray-900">{tenant?.nome}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Agende seu horario online</p>
+        <div className="max-w-lg mx-auto flex items-center gap-3">
+          {tenant?.logo_url && (
+            <img src={tenant.logo_url} alt={tenant.nome} className="w-12 h-12 rounded-lg object-cover" />
+          )}
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">{tenant?.nome}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Agende seu horario online</p>
+          </div>
         </div>
       </div>
 
@@ -901,7 +906,8 @@ fetch('/api/notificar/recebido', {
               <button
                 onClick={confirmarAgendamento}
                 disabled={salvandoAgendamento}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-2"
+                style={{ backgroundColor: tenant?.cor_primaria || '#1a56db' }}
+                className="w-full hover:opacity-90 text-white text-sm py-2.5 rounded-lg transition-opacity disabled:opacity-50 mt-2"
               >
                 {salvandoAgendamento ? 'Confirmando...' : 'Confirmar agendamento'}
               </button>
