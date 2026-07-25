@@ -10,6 +10,9 @@ type Tenant = {
   slug: string
   logo_url: string | null
   cor_primaria: string
+  endereco_lat: number | null
+  endereco_lng: number | null
+  preco_por_km: number | null
 }
 
 type Servico = {
@@ -99,6 +102,7 @@ export default function AgendarPage() {
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false)
   const [erroAgendamento, setErroAgendamento] = useState('')
   const [clienteExistente, setClienteExistente] = useState<any>(null)
+  const [sugestoesClientes, setSugestoesClientes] = useState<any[]>([])
   const [petsDoCliente, setPetsDoCliente] = useState<any[]>([])
   const [petsExistentesSelecionados, setPetsExistentesSelecionados] = useState<string[]>([])
   const [quererCadastrarNovoPet, setQuererCadastrarNovoPet] = useState(false)
@@ -113,6 +117,10 @@ export default function AgendarPage() {
   const [mesmoEndereco, setMesmoEndereco] = useState(true)
   const [cepColeta, setCepColeta] = useState('')
   const [buscandoCep, setBuscandoCep] = useState(false)
+  const [transporteIdaVolta, setTransporteIdaVolta] = useState(false)
+  const [distanciaKm, setDistanciaKm] = useState<number | null>(null)
+  const [valorTransporte, setValorTransporte] = useState<number | null>(null)
+  const [calculandoDistancia, setCalculandoDistancia] = useState(false)
 
   async function buscarCep(cep: string) {
     const cepLimpo = cep.replace(/\D/g, '')
@@ -129,34 +137,70 @@ export default function AgendarPage() {
         if (mesmoEndereco) {
           setEnderecoEntrega(enderecoCompleto)
         }
+        await calcularValorTransporte(enderecoCompleto)
       }
     } catch {
       // silencioso - usuario preenche manualmente se falhar
     }
     setBuscandoCep(false)
   }
+
+  async function calcularValorTransporte(endereco: string) {
+    if (!tenant || !(tenant as any).endereco_lat || !(tenant as any).preco_por_km) return
+
+    setCalculandoDistancia(true)
+    try {
+      const res = await fetch(`/api/geocodificar?endereco=${encodeURIComponent(endereco)}`)
+      const coords = await res.json()
+
+      if (coords.lat) {
+        const R = 6371
+        const lat1 = (tenant as any).endereco_lat
+        const lng1 = (tenant as any).endereco_lng
+        const dLat = (coords.lat - lat1) * (Math.PI / 180)
+        const dLng = (coords.lng - lng1) * (Math.PI / 180)
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(lat1 * (Math.PI / 180)) * Math.cos(coords.lat * (Math.PI / 180)) *
+          Math.sin(dLng / 2) ** 2
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        const distancia = R * c
+
+        setDistanciaKm(distancia)
+      }
+    } catch {
+      // silencioso
+    }
+    setCalculandoDistancia(false)
+  }
   async function buscarClientePorTelefone(telefoneDigitado: string) {
-    if (!tenant || telefoneDigitado.replace(/\D/g, '').length < 10) return
+    setClienteExistente(null)
+    setPetsDoCliente([])
+
+    if (!tenant || telefoneDigitado.replace(/\D/g, '').length < 4) {
+      setSugestoesClientes([])
+      return
+    }
 
     setBuscandoCliente(true)
 
-    const { data: cliente } = await supabase
+    const { data: clientes } = await supabase
       .from('customers')
       .select('id, nome, telefone, pets ( id, nome, especie, porte, raca )')
       .eq('tenant_id', tenant.id)
-      .eq('telefone', telefoneDigitado)
-      .maybeSingle()
+      .ilike('telefone', `%${telefoneDigitado.replace(/\D/g, '')}%`)
+      .limit(6)
 
-    if (cliente) {
-      setClienteExistente(cliente)
-      setNomeCliente(cliente.nome)
-      setPetsDoCliente((cliente as any).pets || [])
-    } else {
-      setClienteExistente(null)
-      setPetsDoCliente([])
-    }
-
+    setSugestoesClientes(clientes || [])
     setBuscandoCliente(false)
+  }
+
+  function selecionarClienteExistente(cliente: any) {
+    setClienteExistente(cliente)
+    setNomeCliente(cliente.nome)
+    setTelefoneCliente(cliente.telefone)
+    setPetsDoCliente(cliente.pets || [])
+    setSugestoesClientes([])
   }
 
   async function buscarHorarios(data: string) {
@@ -348,6 +392,11 @@ export default function AgendarPage() {
           endereco_entrega: precisaTransporte ? enderecoEntrega : null,
           is_recorrente: ehRecorrente,
           frequencia_mensal: ehRecorrente ? frequenciaMensal : null,
+          distancia_km: precisaTransporte ? distanciaKm : null,
+          transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
+          valor_transporte: precisaTransporte && distanciaKm && tenant?.preco_por_km
+            ? distanciaKm * (transporteIdaVolta ? 2 : 1) * Number(tenant.preco_por_km)
+            : 0,
         })
         .select('id')
         .single()
@@ -428,7 +477,7 @@ fetch('/api/notificar/recebido', {
     async function carregar() {
       const { data: tenantData } = await supabase
         .from('tenants')
-        .select('id, nome, slug, logo_url, cor_primaria')
+        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km')
         .eq('slug', slug)
         .single()
 
@@ -651,15 +700,40 @@ fetch('/api/notificar/recebido', {
                 <input
                   type="text"
                   value={telefoneCliente}
-                  onChange={e => setTelefoneCliente(e.target.value)}
-                  onBlur={e => buscarClientePorTelefone(e.target.value)}
+                  onChange={e => {
+                    setTelefoneCliente(e.target.value)
+                    buscarClientePorTelefone(e.target.value)
+                  }}
                   placeholder="(35) 99999-9999"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {buscandoCliente && <p className="text-xs text-gray-400 mt-1">Verificando...</p>}
+
+                {sugestoesClientes.length > 0 && !clienteExistente && (
+                  <div className="border border-gray-200 rounded-lg mt-1 overflow-hidden">
+                    {sugestoesClientes.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selecionarClienteExistente(c)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                      >
+                        {c.nome} • {c.telefone}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {clienteExistente && (
                   <p className="text-xs text-green-600 mt-1">
-                    Bem-vindo de volta, {clienteExistente.nome}! 🐾
+                    Bem-vindo de volta, {clienteExistente.nome}! 🐾{' '}
+                    <button
+                      type="button"
+                      onClick={() => { setClienteExistente(null); setNomeCliente(''); setPetsDoCliente([]) }}
+                      className="underline"
+                    >
+                      trocar
+                    </button>
                   </p>
                 )}
               </div>
@@ -859,7 +933,106 @@ fetch('/api/notificar/recebido', {
                   )}
                 </>
               )}
+<div className="border border-gray-200 rounded-lg p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={precisaTransporte}
+                    onChange={e => setPrecisaTransporte(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700">Preciso de transporte (leva e traz)</span>
+                </label>
 
+                {precisaTransporte && (
+                  <div className="flex flex-col gap-3 mt-3">
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">CEP</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={cepColeta}
+                          onChange={e => setCepColeta(e.target.value)}
+                          onBlur={e => buscarCep(e.target.value)}
+                          placeholder="37700-000"
+                          maxLength={9}
+                          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {buscandoCep && <span className="text-xs text-gray-400 self-center">Buscando...</span>}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">Endereco de coleta</label>
+                      <input
+                        type="text"
+                        value={enderecoColeta}
+                        onChange={e => {
+                          setEnderecoColeta(e.target.value)
+                          if (mesmoEndereco) setEnderecoEntrega(e.target.value)
+                        }}
+                        placeholder="Rua, numero, bairro"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={mesmoEndereco}
+                        onChange={e => {
+                          setMesmoEndereco(e.target.checked)
+                          if (e.target.checked) setEnderecoEntrega(enderecoColeta)
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-xs text-gray-600">Entregar no mesmo endereco</span>
+                    </label>
+
+                    {!mesmoEndereco && (
+                      <div>
+                        <label className="text-sm text-gray-600 mb-1 block">Endereco de entrega</label>
+                        <input
+                          type="text"
+                          value={enderecoEntrega}
+                          onChange={e => setEnderecoEntrega(e.target.value)}
+                          placeholder="Rua, numero, bairro"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+
+                    {tenant?.preco_por_km && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={transporteIdaVolta}
+                          onChange={e => setTransporteIdaVolta(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-xs text-gray-600">Ida e volta (senao, somente ida)</span>
+                      </label>
+                    )}
+
+                    {calculandoDistancia && (
+                      <p className="text-xs text-gray-400">Calculando distancia...</p>
+                    )}
+
+                    {distanciaKm !== null && tenant?.preco_por_km && (
+                      <div className="bg-blue-50 rounded-lg p-2.5">
+                        <p className="text-xs text-blue-700">
+                          Distancia: {distanciaKm.toFixed(1)} km {transporteIdaVolta ? '(ida e volta)' : '(somente ida)'}
+                        </p>
+                        <p className="text-sm font-medium text-blue-700 mt-0.5">
+                          Valor do transporte: R$ {(
+                            distanciaKm * (transporteIdaVolta ? 2 : 1) * Number(tenant.preco_por_km)
+                          ).toFixed(2).replace('.', ',')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="border border-gray-200 rounded-lg p-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

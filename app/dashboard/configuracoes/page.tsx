@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { geocodificarEndereco } from '@/lib/distancia'
 
 const PLANOS = [
   { id: 'starter', nome: 'Starter', preco: 'R$ 89,90', desc: '1 profissional' },
@@ -15,6 +16,14 @@ export default function ConfiguracoesPage() {
   const [corPrimaria, setCorPrimaria] = useState('#1a56db')
   const [enviandoLogo, setEnviandoLogo] = useState(false)
   const [salvandoMarca, setSalvandoMarca] = useState(false)
+  const [cepBase, setCepBase] = useState('')
+  const [ruaBase, setRuaBase] = useState('')
+  const [numeroBase, setNumeroBase] = useState('')
+  const [bairroBase, setBairroBase] = useState('')
+  const [cidadeBase, setCidadeBase] = useState('')
+  const [precoPorKm, setPrecoPorKm] = useState('')
+  const [salvandoTransporte, setSalvandoTransporte] = useState(false)
+  const [geocodificando, setGeocodificando] = useState(false)
   const [zapiInstanceId, setZapiInstanceId] = useState('')
   const [zapiToken, setZapiToken] = useState('')
   const [whatsappConectado, setWhatsappConectado] = useState(false)
@@ -83,6 +92,55 @@ export default function ConfiguracoesPage() {
 
     setSalvandoMarca(false)
   }
+  async function buscarCepBase(cep: string) {
+    const cepLimpo = cep.replace(/\D/g, '')
+    if (cepLimpo.length !== 8) return
+
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`)
+      const data = await res.json()
+      if (!data.erro) {
+        setRuaBase(data.logradouro || '')
+        setBairroBase(data.bairro || '')
+        setCidadeBase(`${data.localidade} - ${data.uf}`)
+      }
+    } catch {}
+  }
+
+  async function salvarTransporte() {
+    setSalvandoTransporte(true)
+    setGeocodificando(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const enderecoCompleto = `${ruaBase}, ${numeroBase}, ${bairroBase}, ${cidadeBase}`
+
+    let lat = null
+    let lng = null
+
+    if (ruaBase) {
+      const res = await fetch(`/api/geocodificar?endereco=${encodeURIComponent(enderecoCompleto)}`)
+      const coords = await res.json()
+      if (coords.lat) {
+        lat = coords.lat
+        lng = coords.lng
+      }
+    }
+
+    setGeocodificando(false)
+
+    await supabase
+      .from('tenants')
+      .update({
+        endereco_lat: lat,
+        endereco_lng: lng,
+        preco_por_km: parseFloat(precoPorKm) || 0,
+      })
+      .eq('email', user.email)
+
+    setSalvandoTransporte(false)
+  }
 
   async function salvarWhatsapp() {
     setSalvandoWhatsapp(true)
@@ -142,6 +200,89 @@ export default function ConfiguracoesPage() {
             </button>
           </div>
         ))}
+      </div>
+      <div className="mt-8 bg-white border border-gray-100 rounded-2xl p-5 max-w-md">
+        <h3 className="text-sm font-medium text-gray-900 mb-4">Transporte por distancia</h3>
+
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">CEP</label>
+            <input
+              type="text"
+              value={cepBase}
+              onChange={e => setCepBase(e.target.value)}
+              onBlur={e => buscarCepBase(e.target.value)}
+              placeholder="37700-000"
+              maxLength={9}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Rua</label>
+            <input
+              type="text"
+              value={ruaBase}
+              onChange={e => setRuaBase(e.target.value)}
+              placeholder="Rua das Flores"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <div className="w-24">
+              <label className="text-sm text-gray-600 mb-1 block">Numero</label>
+              <input
+                type="text"
+                value={numeroBase}
+                onChange={e => setNumeroBase(e.target.value)}
+                placeholder="123"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-sm text-gray-600 mb-1 block">Bairro</label>
+              <input
+                type="text"
+                value={bairroBase}
+                onChange={e => setBairroBase(e.target.value)}
+                placeholder="Centro"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Cidade - UF</label>
+            <input
+              type="text"
+              value={cidadeBase}
+              onChange={e => setCidadeBase(e.target.value)}
+              placeholder="Pocos de Caldas - MG"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Usado como ponto de partida para calcular a distancia</p>
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Preco por km (R$)</label>
+            <input
+              type="number"
+              value={precoPorKm}
+              onChange={e => setPrecoPorKm(e.target.value)}
+              placeholder="2.50"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <button
+            onClick={salvarTransporte}
+            disabled={salvandoTransporte}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {geocodificando ? 'Localizando endereco...' : salvandoTransporte ? 'Salvando...' : 'Salvar configuracao de transporte'}
+          </button>
+        </div>
       </div>
 <div className="mt-8 bg-white border border-gray-100 rounded-2xl p-5 max-w-md">
         <h3 className="text-sm font-medium text-gray-900 mb-4">Personalizacao de marca</h3>
