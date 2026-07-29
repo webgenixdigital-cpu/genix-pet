@@ -41,7 +41,10 @@ export default function ProfissionaisPage() {
 
   async function carregarProfissionais() {
     const { data: tenant } = await supabase.from('tenants').select('id').single()
-    if (!tenant) return
+    if (!tenant) {
+      setCarregando(false)
+      return
+    }
 
     const { data } = await supabase
       .from('professionals')
@@ -74,11 +77,31 @@ export default function ProfissionaisPage() {
       return
     }
 
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+    const { data: tenant } = await supabase.from('tenants').select('id, plan_id').single()
     if (!tenant) {
       setErro('Tenant nao encontrado.')
       setSalvando(false)
       return
+    }
+
+    if (tenant.plan_id) {
+      const { data: plano } = await supabase
+        .from('plans')
+        .select('max_profissionais')
+        .eq('id', tenant.plan_id)
+        .single()
+
+      const { count } = await supabase
+        .from('professionals')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.id)
+        .eq('ativo', true)
+
+      if (plano && count !== null && count >= plano.max_profissionais) {
+        setErro(`Seu plano permite ate ${plano.max_profissionais} profissional(is). Faca upgrade para adicionar mais.`)
+        setSalvando(false)
+        return
+      }
     }
 
     const { error } = await supabase.from('professionals').insert({
