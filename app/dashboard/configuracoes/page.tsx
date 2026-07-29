@@ -14,6 +14,7 @@ const PLANOS = [
 export default function ConfiguracoesPage() {
   const searchParams = useSearchParams()
   const bloqueado = searchParams.get('bloqueado') === '1'
+  const bloqueadoPorPlano = searchParams.get('bloqueado') === 'plano'
   const [carregando, setCarregando] = useState<string | null>(null)
   const [logoUrl, setLogoUrl] = useState('')
   const [corPrimaria, setCorPrimaria] = useState('#1a56db')
@@ -192,6 +193,17 @@ export default function ConfiguracoesPage() {
           </p>
           <p className="text-xs text-red-600 mt-1">
             Escolha um plano abaixo para continuar usando o Genix Pet normalmente.
+          </p>
+        </div>
+      )}
+
+      {bloqueadoPorPlano && (
+        <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 mb-6">
+          <p className="text-sm text-orange-700 font-medium">
+            Essa funcionalidade não está disponível no seu plano atual.
+          </p>
+          <p className="text-xs text-orange-600 mt-1">
+            Faça upgrade para um plano superior para desbloquear essa área.
           </p>
         </div>
       )}

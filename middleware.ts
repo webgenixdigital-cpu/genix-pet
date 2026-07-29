@@ -40,14 +40,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Checagem de trial expirado / assinatura inativa
+  // Checagem de trial expirado / assinatura inativa / limites por plano
   const rotaBloqueavel = request.nextUrl.pathname.startsWith('/dashboard')
     && request.nextUrl.pathname !== '/dashboard/configuracoes'
 
   if (user && rotaBloqueavel) {
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('status, trial_termina_em')
+      .select('status, trial_termina_em, plan_id')
       .eq('email', user.email!)
       .single()
 
@@ -57,6 +57,27 @@ export async function middleware(request: NextRequest) {
 
       if (trialExpirado || semAssinatura) {
         return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=1', request.url))
+      }
+
+      if (tenant.plan_id) {
+        const { data: plano } = await supabase
+          .from('plans')
+          .select('tem_catalogo_produtos, tem_modulo_financeiro, tem_whatsapp')
+          .eq('id', tenant.plan_id)
+          .single()
+
+        if (plano) {
+          const rotaProdutos = request.nextUrl.pathname.startsWith('/dashboard/produtos')
+          const rotaPacotes = request.nextUrl.pathname.startsWith('/dashboard/pacotes')
+          const rotaFinanceiro = request.nextUrl.pathname.startsWith('/dashboard/financeiro')
+
+          if (rotaProdutos && !plano.tem_catalogo_produtos) {
+            return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=plano', request.url))
+          }
+          if ((rotaPacotes || rotaFinanceiro) && !plano.tem_modulo_financeiro) {
+            return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=plano', request.url))
+          }
+        }
       }
     }
   }
