@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { geocodificarEndereco } from '@/lib/distancia'
 
@@ -11,6 +12,8 @@ const PLANOS = [
 ]
 
 export default function ConfiguracoesPage() {
+  const searchParams = useSearchParams()
+  const bloqueado = searchParams.get('bloqueado') === '1'
   const [carregando, setCarregando] = useState<string | null>(null)
   const [logoUrl, setLogoUrl] = useState('')
   const [corPrimaria, setCorPrimaria] = useState('#1a56db')
@@ -182,6 +185,17 @@ export default function ConfiguracoesPage() {
 
   return (
     <div>
+      {bloqueado && (
+        <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-6">
+          <p className="text-sm text-red-700 font-medium">
+            Seu período de teste acabou ou sua assinatura está inativa.
+          </p>
+          <p className="text-xs text-red-600 mt-1">
+            Escolha um plano abaixo para continuar usando o Genix Pet normalmente.
+          </p>
+        </div>
+      )}
+
       <h2 className="text-xl font-semibold text-gray-900 mb-1">Configuracoes</h2>
       <p className="text-sm text-gray-500 mb-6">Escolha o plano da sua assinatura</p>
 

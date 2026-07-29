@@ -40,6 +40,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
+  // Checagem de trial expirado / assinatura inativa
+  const rotaBloqueavel = request.nextUrl.pathname.startsWith('/dashboard')
+    && request.nextUrl.pathname !== '/dashboard/configuracoes'
+
+  if (user && rotaBloqueavel) {
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('status, trial_termina_em')
+      .eq('email', user.email!)
+      .single()
+
+    if (tenant) {
+      const trialExpirado = tenant.status === 'trial' && new Date(tenant.trial_termina_em) < new Date()
+      const semAssinatura = tenant.status !== 'active' && tenant.status !== 'trial'
+
+      if (trialExpirado || semAssinatura) {
+        return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=1', request.url))
+      }
+    }
+  }
+
   return supabaseResponse
 }
 
