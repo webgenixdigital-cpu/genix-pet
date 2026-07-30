@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { geocodificarEndereco } from '@/lib/distancia'
 
@@ -32,6 +33,7 @@ export default function ConfiguracoesPage() {
   const [zapiToken, setZapiToken] = useState('')
   const [whatsappConectado, setWhatsappConectado] = useState(false)
   const [salvandoWhatsapp, setSalvandoWhatsapp] = useState(false)
+  const [temWhatsappNoPlano, setTemWhatsappNoPlano] = useState(true)
   const supabase = createClient()
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function ConfiguracoesPage() {
 
       const { data } = await supabase
         .from('tenants')
-        .select('zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria')
+        .select('zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id')
         .eq('email', user.email)
         .single()
 
@@ -51,6 +53,16 @@ export default function ConfiguracoesPage() {
         setWhatsappConectado(data.whatsapp_conectado || false)
         setLogoUrl(data.logo_url || '')
         setCorPrimaria(data.cor_primaria || '#1a56db')
+
+        if (data.plan_id) {
+          const { data: plano } = await supabase
+            .from('plans')
+            .select('tem_whatsapp')
+            .eq('id', data.plan_id)
+            .single()
+
+          setTemWhatsappNoPlano(plano?.tem_whatsapp ?? true)
+        }
       }
     }
 
@@ -354,6 +366,15 @@ export default function ConfiguracoesPage() {
             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Conectado</span>
           )}
         </div>
+
+        {!temWhatsappNoPlano && (
+          <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 mb-4">
+            <p className="text-xs text-orange-700">
+              🔒 O WhatsApp automático está disponível a partir do plano Premium.
+              <Link href="#planos" className="underline font-medium ml-1">Fazer upgrade</Link>
+            </p>
+          </div>
+        )}
 
         <p className="text-xs text-gray-400 mb-4">
           Cole os dados fornecidos pelo suporte para ativar os lembretes automaticos
