@@ -53,8 +53,82 @@ export default function NovoAgendamentoPage() {
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
 
+  const [tenantTransporte, setTenantTransporte] = useState<{
+    endereco_lat: number | null
+    endereco_lng: number | null
+    preco_por_km: number | null
+    valor_minimo_transporte: number | null
+  } | null>(null)
+
+  const [precisaTransporte, setPrecisaTransporte] = useState(false)
+  const [cepColeta, setCepColeta] = useState('')
+  const [enderecoColeta, setEnderecoColeta] = useState('')
+  const [buscandoCep, setBuscandoCep] = useState(false)
+  const [transporteIdaVolta, setTransporteIdaVolta] = useState(false)
+  const [distanciaKm, setDistanciaKm] = useState<number | null>(null)
+  const [calculandoDistancia, setCalculandoDistancia] = useState(false)
+  const [descontoTransporte, setDescontoTransporte] = useState('0')
+  async function buscarCepColeta(cep: string) {
+    const cepLimpo = cep.replace(/\D/g, '')
+    if (cepLimpo.length !== 8) return
+
+    setBuscandoCep(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`)
+      const data = await res.json()
+
+      if (!data.erro) {
+        const enderecoCompleto = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`
+        setEnderecoColeta(enderecoCompleto)
+        await calcularDistanciaTransporte(enderecoCompleto)
+      }
+    } catch {
+      // silencioso
+    }
+    setBuscandoCep(false)
+  }
+
+  async function calcularDistanciaTransporte(endereco: string) {
+    if (!tenantTransporte?.endereco_lat || !tenantTransporte?.preco_por_km) return
+
+    setCalculandoDistancia(true)
+    try {
+      const res = await fetch(`/api/geocodificar?endereco=${encodeURIComponent(endereco)}`)
+      const coords = await res.json()
+
+      if (coords.lat) {
+        const R = 6371
+        const lat1 = tenantTransporte.endereco_lat
+        const lng1 = tenantTransporte.endereco_lng!
+        const dLat = (coords.lat - lat1) * (Math.PI / 180)
+        const dLng = (coords.lng - lng1) * (Math.PI / 180)
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(lat1 * (Math.PI / 180)) * Math.cos(coords.lat * (Math.PI / 180)) *
+          Math.sin(dLng / 2) ** 2
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        setDistanciaKm(R * c)
+      }
+    } catch {
+      // silencioso
+    }
+    setCalculandoDistancia(false)
+  }
+
+  function calcularValorTransporteFinal(): number {
+    if (!distanciaKm || !tenantTransporte?.preco_por_km) return 0
+    const minimo = Number(tenantTransporte.valor_minimo_transporte || 0)
+    const valorPorTrecho = Math.max(distanciaKm * Number(tenantTransporte.preco_por_km), minimo)
+    const bruto = valorPorTrecho * (transporteIdaVolta ? 2 : 1)
+    const desconto = parseFloat(descontoTransporte) || 0
+    return Math.max(bruto - desconto, 0)
+  }
+
   async function carregarDados() {
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte')
+      .single()
     if (!tenant) return
 
     const { data: servicosData } = await supabase
@@ -64,6 +138,12 @@ export default function NovoAgendamentoPage() {
 
     setServicos(servicosData || [])
     setProfissionais(profissionaisData || [])
+    setTenantTransporte({
+      endereco_lat: tenant.endereco_lat,
+      endereco_lng: tenant.endereco_lng,
+      preco_por_km: tenant.preco_por_km,
+      valor_minimo_transporte: tenant.valor_minimo_transporte,
+    })
     setCarregando(false)
   }
 
@@ -223,6 +303,8 @@ export default function NovoAgendamentoPage() {
       }
     }
 
+    const valorTransporteFinal = precisaTransporte ? calcularValorTransporteFinal() : 0
+
     const { error: erroAgendamento } = await supabase.from('appointments').insert({
       tenant_id: tenant.id,
       customer_id: clienteId,
@@ -234,6 +316,13 @@ export default function NovoAgendamentoPage() {
       status: 'agendado',
       origem: 'telefone',
       preco_cobrado: servico?.preco || 0,
+      precisa_transporte: precisaTransporte,
+      endereco_coleta: precisaTransporte ? enderecoColeta : null,
+      endereco_entrega: precisaTransporte ? enderecoColeta : null,
+      distancia_km: precisaTransporte ? distanciaKm : null,
+      transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
+      valor_transporte: valorTransporteFinal,
+      desconto_transporte: precisaTransporte ? (parseFloat(descontoTransporte) || 0) : 0,
     })
 
     if (erroAgendamento) {
@@ -381,6 +470,83 @@ export default function NovoAgendamentoPage() {
             <option value="">Qualquer disponivel</option>
             {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
           </select>
+        </div>
+
+        <div className="border border-gray-200 rounded-lg p-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={precisaTransporte}
+              onChange={e => setPrecisaTransporte(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm text-gray-700">Precisa de transporte</span>
+          </label>
+
+          {precisaTransporte && (
+            <div className="flex flex-col gap-3 mt-3">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">CEP</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={cepColeta}
+                    onChange={e => setCepColeta(e.target.value)}
+                    onBlur={e => buscarCepColeta(e.target.value)}
+                    placeholder="37700-000"
+                    maxLength={9}
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {buscandoCep && <span className="text-xs text-gray-400 self-center">Buscando...</span>}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Endereco de coleta</label>
+                <input
+                  type="text"
+                  value={enderecoColeta}
+                  onChange={e => setEnderecoColeta(e.target.value)}
+                  placeholder="Rua, numero, bairro"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={transporteIdaVolta}
+                  onChange={e => setTransporteIdaVolta(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-xs text-gray-600">Ida e volta (senao, somente ida)</span>
+              </label>
+
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Desconto no transporte (R$)</label>
+                <input
+                  type="number"
+                  value={descontoTransporte}
+                  onChange={e => setDescontoTransporte(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {calculandoDistancia && <p className="text-xs text-gray-400">Calculando distancia...</p>}
+
+              {distanciaKm !== null && tenantTransporte?.preco_por_km && (
+                <div className="bg-blue-50 rounded-lg p-2.5">
+                  <p className="text-xs text-blue-700">
+                    Distancia: {distanciaKm.toFixed(1)} km {transporteIdaVolta ? '(ida e volta)' : '(somente ida)'}
+                  </p>
+                  <p className="text-sm font-medium text-blue-700 mt-0.5">
+                    Valor do transporte: R$ {calcularValorTransporteFinal().toFixed(2).replace('.', ',')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div>

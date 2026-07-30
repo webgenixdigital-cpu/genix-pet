@@ -44,6 +44,7 @@ export default function AgendaPage() {
   const [carregando, setCarregando] = useState(true)
   const [dataFiltro, setDataFiltro] = useState(formatarDataISO(new Date()))
   const [periodoFiltro, setPeriodoFiltro] = useState<'dia' | 'semana' | 'mes'>('dia')
+  const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
   const supabase = createClient()
 
   function calcularIntervalo() {
@@ -356,12 +357,81 @@ export default function AgendaPage() {
                           </>
                         )}
                       </div>
+                      <button
+                        onClick={() => setTicketAberto(a)}
+                        className="text-[11px] text-gray-500 hover:underline mt-1 block w-full text-center"
+                      >
+                        🎫 Imprimir ticket
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             )
           })}
+        </div>
+      )}
+
+      {ticketAberto && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 print:bg-white print:static">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm mx-4 print:rounded-none print:max-w-none print:shadow-none">
+            <style>{`
+              @media print {
+                @page { size: 80mm auto; margin: 0; }
+                body * { visibility: hidden; }
+                #area-ticket, #area-ticket * { visibility: visible; }
+                #area-ticket {
+                  position: fixed;
+                  top: 0;
+                  left: 0;
+                  width: 72mm;
+                  padding: 2mm;
+                  font-size: 11px;
+                  line-height: 1.4;
+                }
+              }
+            `}</style>
+
+            <div id="area-ticket" className="font-mono text-xs">
+              <div className="text-center mb-3">
+                <p className="font-bold text-sm">GENIX PET</p>
+                <p>Ticket de Atendimento</p>
+                <p>{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+              </div>
+              <div className="border-t border-dashed border-gray-400 my-2" />
+              <p>Cliente: {ticketAberto.customers?.nome}</p>
+              <p>Telefone: {ticketAberto.customers?.telefone}</p>
+              <p>Pet: {ticketAberto.pets?.nome}</p>
+              <p>Servico: {ticketAberto.services?.nome}</p>
+              <p>Horario: {new Date(ticketAberto.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+              {ticketAberto.professionals?.nome && <p>Profissional: {ticketAberto.professionals.nome}</p>}
+              {ticketAberto.precisa_transporte && (
+                <>
+                  <div className="border-t border-dashed border-gray-400 my-2" />
+                  <p className="font-bold">TRANSPORTE</p>
+                  {ticketAberto.endereco_coleta && <p>Coleta: {ticketAberto.endereco_coleta}</p>}
+                  {ticketAberto.endereco_entrega && <p>Entrega: {ticketAberto.endereco_entrega}</p>}
+                </>
+              )}
+              <div className="border-t border-dashed border-gray-400 my-2" />
+              <p className="text-center text-[10px] mt-2">Seu pet esta em boas maos!</p>
+            </div>
+
+            <div className="flex gap-3 mt-6 print:hidden">
+              <button
+                onClick={() => setTicketAberto(null)}
+                className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors"
+              >
+                Imprimir ticket
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

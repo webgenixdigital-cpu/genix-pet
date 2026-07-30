@@ -27,6 +27,7 @@ export default function ConfiguracoesPage() {
   const [bairroBase, setBairroBase] = useState('')
   const [cidadeBase, setCidadeBase] = useState('')
   const [precoPorKm, setPrecoPorKm] = useState('')
+  const [valorMinimoTransporte, setValorMinimoTransporte] = useState('5.00')
   const [salvandoTransporte, setSalvandoTransporte] = useState(false)
   const [geocodificando, setGeocodificando] = useState(false)
   const [zapiInstanceId, setZapiInstanceId] = useState('')
@@ -43,7 +44,7 @@ export default function ConfiguracoesPage() {
 
       const { data } = await supabase
         .from('tenants')
-        .select('zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id')
+        .select('zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id, preco_por_km, valor_minimo_transporte')
         .eq('email', user.email)
         .single()
 
@@ -53,6 +54,8 @@ export default function ConfiguracoesPage() {
         setWhatsappConectado(data.whatsapp_conectado || false)
         setLogoUrl(data.logo_url || '')
         setCorPrimaria(data.cor_primaria || '#1a56db')
+        setPrecoPorKm(data.preco_por_km?.toString() || '')
+        setValorMinimoTransporte(data.valor_minimo_transporte?.toString() || '5.00')
 
         if (data.plan_id) {
           const { data: plano } = await supabase
@@ -152,6 +155,7 @@ export default function ConfiguracoesPage() {
         endereco_lat: lat,
         endereco_lng: lng,
         preco_por_km: parseFloat(precoPorKm) || 0,
+        valor_minimo_transporte: parseFloat(valorMinimoTransporte) || 0,
       })
       .eq('email', user.email)
 
@@ -311,6 +315,18 @@ export default function ConfiguracoesPage() {
               placeholder="2.50"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Valor minimo do transporte (R$)</label>
+            <input
+              type="number"
+              value={valorMinimoTransporte}
+              onChange={e => setValorMinimoTransporte(e.target.value)}
+              placeholder="5.00"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Aplicado quando o calculo por km ficar abaixo desse valor</p>
           </div>
 
           <button

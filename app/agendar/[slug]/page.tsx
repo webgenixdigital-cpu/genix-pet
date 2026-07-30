@@ -13,6 +13,7 @@ type Tenant = {
   endereco_lat: number | null
   endereco_lng: number | null
   preco_por_km: number | null
+  valor_minimo_transporte: number | null
 }
 
 type Servico = {
@@ -395,7 +396,7 @@ export default function AgendarPage() {
           distancia_km: precisaTransporte ? distanciaKm : null,
           transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
           valor_transporte: precisaTransporte && distanciaKm && tenant?.preco_por_km
-            ? distanciaKm * (transporteIdaVolta ? 2 : 1) * Number(tenant.preco_por_km)
+            ? Math.max(distanciaKm * Number(tenant.preco_por_km), Number(tenant.valor_minimo_transporte || 0)) * (transporteIdaVolta ? 2 : 1)
             : 0,
         })
         .select('id')
@@ -477,7 +478,7 @@ fetch('/api/notificar/recebido', {
     async function carregar() {
       const { data: tenantData } = await supabase
         .from('tenants')
-        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km')
+        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte')
         .eq('slug', slug)
         .single()
 
@@ -1025,7 +1026,7 @@ fetch('/api/notificar/recebido', {
                         </p>
                         <p className="text-sm font-medium text-blue-700 mt-0.5">
                           Valor do transporte: R$ {(
-                            distanciaKm * (transporteIdaVolta ? 2 : 1) * Number(tenant.preco_por_km)
+                            Math.max(distanciaKm * Number(tenant.preco_por_km), Number(tenant.valor_minimo_transporte || 0)) * (transporteIdaVolta ? 2 : 1)
                           ).toFixed(2).replace('.', ',')}
                         </p>
                       </div>
