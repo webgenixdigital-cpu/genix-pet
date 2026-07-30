@@ -43,12 +43,36 @@ export default function AgendaPage() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [carregando, setCarregando] = useState(true)
   const [dataFiltro, setDataFiltro] = useState(formatarDataISO(new Date()))
+  const [periodoFiltro, setPeriodoFiltro] = useState<'dia' | 'semana' | 'mes'>('dia')
   const supabase = createClient()
+
+  function calcularIntervalo() {
+    const base = new Date(dataFiltro + 'T00:00:00')
+
+    if (periodoFiltro === 'dia') {
+      return { inicio: dataFiltro, fim: dataFiltro }
+    }
+
+    if (periodoFiltro === 'semana') {
+      const diaSemana = base.getDay()
+      const inicioSemana = new Date(base)
+      inicioSemana.setDate(base.getDate() - diaSemana)
+      const fimSemana = new Date(inicioSemana)
+      fimSemana.setDate(inicioSemana.getDate() + 6)
+      return { inicio: formatarDataISO(inicioSemana), fim: formatarDataISO(fimSemana) }
+    }
+
+    const inicioMes = new Date(base.getFullYear(), base.getMonth(), 1)
+    const fimMes = new Date(base.getFullYear(), base.getMonth() + 1, 0)
+    return { inicio: formatarDataISO(inicioMes), fim: formatarDataISO(fimMes) }
+  }
 
   async function carregarAgendamentos() {
     setCarregando(true)
     const { data: tenant } = await supabase.from('tenants').select('id').single()
     if (!tenant) return
+
+    const { inicio, fim } = calcularIntervalo()
 
     const { data } = await supabase
       .from('appointments')
@@ -60,8 +84,8 @@ export default function AgendaPage() {
         services ( nome )
       `)
       .eq('tenant_id', tenant.id)
-      .gte('inicio', dataFiltro + 'T00:00:00')
-      .lte('inicio', dataFiltro + 'T23:59:59')
+      .gte('inicio', inicio + 'T00:00:00')
+      .lte('inicio', fim + 'T23:59:59')
       .neq('status', 'cancelado')
       .neq('status', 'faltou')
       .order('inicio')
@@ -191,23 +215,57 @@ export default function AgendaPage() {
   }
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Agenda</h2>
           <p className="text-sm text-gray-500 mt-0.5">Fluxo de trabalho do dia</p>
         </div>
-        <div className="flex items-center gap-3">
-        <input
-          type="date"
-          value={dataFiltro}
-          onChange={e => setDataFiltro(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
         <a href="/dashboard/agenda/novo" className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
           + Novo agendamento
         </a>
       </div>
-    </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        {(['dia', 'semana', 'mes'] as const).map(p => (
+          <button
+            key={p}
+            onClick={() => setPeriodoFiltro(p)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors capitalize ${
+              periodoFiltro === p
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-200'
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+        {Array.from({ length: 14 }).map((_, i) => {
+          const data = new Date()
+          data.setDate(data.getDate() + i)
+          const dataISO = formatarDataISO(data)
+          const selecionado = dataISO === dataFiltro
+          const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')
+          const diaMes = data.getDate()
+
+          return (
+            <button
+              key={dataISO}
+              onClick={() => setDataFiltro(dataISO)}
+              className={`flex flex-col items-center justify-center flex-shrink-0 w-14 h-16 rounded-xl border transition-colors ${
+                selecionado
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+              }`}
+            >
+              <span className="text-[10px] uppercase">{diaSemana}</span>
+              <span className="text-base font-semibold">{diaMes}</span>
+            </button>
+          )
+        })}
+      </div>
 
       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
