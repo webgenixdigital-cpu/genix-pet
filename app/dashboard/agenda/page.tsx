@@ -133,8 +133,9 @@ export default function AgendaPage() {
               descricao: `${agendamento.services?.nome} - ${agendamento.pets?.nome}`,
               valor: agendamento.preco_cobrado || 0,
               data_lancamento: new Date().toISOString().split('T')[0],
-              status: 'pago',
+              status: 'pendente',
               appointment_id: id,
+              customer_id: agendamento.customer_id,
             })
           }
           fetch('/api/notificar/pet-pronto', {

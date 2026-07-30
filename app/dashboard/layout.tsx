@@ -65,6 +65,7 @@ export default function DashboardLayout({
     { href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁', liberado: permissoes.tem_modulo_financeiro },
     { href: '/dashboard/clientes', label: 'Clientes', icon: '👥', liberado: true },
     { href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰', liberado: permissoes.tem_modulo_financeiro },
+    { href: '/dashboard/caixa', label: 'Caixa', icon: '💵', liberado: true },
     { href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️', liberado: true },
   ]
 
