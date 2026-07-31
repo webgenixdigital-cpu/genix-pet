@@ -59,7 +59,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=1', request.url))
       }
 
-      if (tenant.plan_id) {
+      if (tenant.plan_id && tenant.status !== 'trial') {
         const { data: plano } = await supabase
           .from('plans')
           .select('tem_catalogo_produtos, tem_modulo_financeiro, tem_whatsapp')

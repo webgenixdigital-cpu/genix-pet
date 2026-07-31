@@ -7,9 +7,18 @@ import { createClient } from '@/lib/supabase'
 import { geocodificarEndereco } from '@/lib/distancia'
 
 const PLANOS = [
-  { id: 'starter', nome: 'Starter', preco: 'R$ 89,90', desc: '1 profissional' },
-  { id: 'premium', nome: 'Premium', preco: 'R$ 189,90', desc: 'Ate 3 profissionais' },
-  { id: 'pro', nome: 'Pro', preco: 'R$ 349,90', desc: 'Ate 10 profissionais' },
+  {
+    id: 'starter', nome: 'Starter', preco: 'R$ 89,90', desc: '1 profissional',
+    itens: ['Agendamento online publico', 'Clientes e pets ilimitados', 'Bloqueios de agenda', 'Fila de encaixe', 'Confirmacao por e-mail'],
+  },
+  {
+    id: 'premium', nome: 'Premium', preco: 'R$ 189,90', desc: 'Ate 3 profissionais',
+    itens: ['Tudo do Starter', 'Lembretes via WhatsApp', 'Modulo financeiro', 'Controle de comissoes', 'Agendamentos recorrentes', 'Pacotes de servico'],
+  },
+  {
+    id: 'pro', nome: 'Pro', preco: 'R$ 349,90', desc: 'Ate 10 profissionais',
+    itens: ['Tudo do Premium', 'Catalogo de produtos', 'Controle de estoque', 'Personalizacao de marca', 'Relatorios avancados', 'Suporte prioritario'],
+  },
 ]
 
 export default function ConfiguracoesPage() {
@@ -203,13 +212,43 @@ export default function ConfiguracoesPage() {
   return (
     <div>
       {bloqueado && (
-        <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-6">
-          <p className="text-sm text-red-700 font-medium">
-            Seu período de teste acabou ou sua assinatura está inativa.
-          </p>
-          <p className="text-xs text-red-600 mt-1">
-            Escolha um plano abaixo para continuar usando o Genix Pet normalmente.
-          </p>
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-3">⏳</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-1">Seu periodo de teste acabou</h3>
+              <p className="text-sm text-gray-500">
+                Escolha um plano para continuar usando o Genix Pet sem interrupcoes
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {PLANOS.map(p => (
+                <div key={p.id} className="border border-gray-200 rounded-2xl p-4">
+                  <p className="text-sm font-medium text-gray-900">{p.nome}</p>
+                  <p className="text-2xl font-semibold text-gray-900 mt-1">
+                    {p.preco}<span className="text-xs text-gray-400 font-normal">/mes</span>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1 mb-3">{p.desc}</p>
+                  <ul className="flex flex-col gap-1.5 mb-4">
+                    {p.itens.map(item => (
+                      <li key={item} className="text-xs text-gray-600 flex items-start gap-1.5">
+                        <span className="text-green-600 flex-shrink-0">✓</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => assinar(p.id)}
+                    disabled={carregando === p.id}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {carregando === p.id ? 'Redirecionando...' : 'Assinar este plano'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
