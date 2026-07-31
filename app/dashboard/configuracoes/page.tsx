@@ -11,14 +11,7 @@ const PLANOS = [
     id: 'starter', nome: 'Starter', preco: 'R$ 89,90', desc: '1 profissional',
     itens: ['Agendamento online publico', 'Clientes e pets ilimitados', 'Bloqueios de agenda', 'Fila de encaixe', 'Confirmacao por e-mail'],
   },
-  {
-    id: 'premium', nome: 'Premium', preco: 'R$ 189,90', desc: 'Ate 3 profissionais',
-    itens: ['Tudo do Starter', 'Lembretes via WhatsApp', 'Modulo financeiro', 'Controle de comissoes', 'Agendamentos recorrentes', 'Pacotes de servico', 'Relatorio fiscal'],
-  },
-  {
-    id: 'pro', nome: 'Pro', preco: 'R$ 349,90', desc: 'Ate 10 profissionais',
-    itens: ['Tudo do Premium', 'Catalogo de produtos', 'Controle de estoque', 'Personalizacao de marca', 'Relatorios avancados', 'Suporte prioritario', 'Base de servicos por raca e combos, com sugestoes de upsell no WhatsApp'],
-  },
+  
 ]
 
 export default function ConfiguracoesPage() {

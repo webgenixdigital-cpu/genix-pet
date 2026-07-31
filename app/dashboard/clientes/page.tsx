@@ -36,7 +36,10 @@ export default function ClientesPage() {
   async function carregarDados() {
     setCarregando(true)
     const { data: tenant } = await supabase.from('tenants').select('id').single()
-    if (!tenant) return
+    if (!tenant) {
+      setCarregando(false)
+      return
+    }
 
     const { data: clientesData } = await supabase
       .from('customers')

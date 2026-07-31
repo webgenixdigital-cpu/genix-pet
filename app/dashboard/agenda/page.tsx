@@ -71,7 +71,10 @@ export default function AgendaPage() {
   async function carregarAgendamentos() {
     setCarregando(true)
     const { data: tenant } = await supabase.from('tenants').select('id').single()
-    if (!tenant) return
+    if (!tenant) {
+      setCarregando(false)
+      return
+    }
 
     const { inicio, fim } = calcularIntervalo()
 

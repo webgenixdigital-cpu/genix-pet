@@ -129,7 +129,10 @@ export default function NovoAgendamentoPage() {
       .from('tenants')
       .select('id, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte')
       .single()
-    if (!tenant) return
+    if (!tenant) {
+      setCarregando(false)
+      return
+    }
 
     const { data: servicosData } = await supabase
       .from('services').select('id, nome, preco, duracao_min').eq('tenant_id', tenant.id).eq('ativo', true).order('nome')

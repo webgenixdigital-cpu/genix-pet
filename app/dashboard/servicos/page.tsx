@@ -30,7 +30,10 @@ export default function ServicosPage() {
       .select('id')
       .single()
 
-    if (!tenant) return
+    if (!tenant) {
+      setCarregando(false)
+      return
+    }
 
     const { data } = await supabase
       .from('services')
