@@ -161,10 +161,11 @@ export default function DashboardLayout({
     { id: 'profissionais', href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️', liberado: true },
     { id: 'servicos', href: '/dashboard/servicos', label: 'Serviços', icon: '🛁', liberado: true },
     { id: 'produtos', href: '/dashboard/produtos', label: 'Produtos', icon: '📦', liberado: permissoes.tem_catalogo_produtos },
-    { id: 'pacotes', href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁', liberado: permissoes.tem_modulo_financeiro },
+    { id: 'pacotes', href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁', liberado: true },
     { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes', icon: '👥', liberado: true },
     { id: 'financeiro', href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰', liberado: permissoes.tem_modulo_financeiro },
     { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa', icon: '💵', liberado: true },
+    { id: 'relatorio-fiscal', href: '/dashboard/relatorio-fiscal', label: 'Relatorio Fiscal', icon: '📄', liberado: permissoes.tem_modulo_financeiro },
     { id: 'configuracoes', href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️', liberado: true },
   ]
 

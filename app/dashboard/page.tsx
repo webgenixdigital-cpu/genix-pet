@@ -12,6 +12,7 @@ type Agendamento = {
   endereco_coleta: string | null
   service_id: string
   professional_id: string | null
+  customer_id: string
   customers: { nome: string } | null
   pets: { nome: string } | null
   services: { nome: string } | null
@@ -63,13 +64,16 @@ export default function DashboardPage() {
   async function carregarDados() {
     setCarregando(true)
     const { data: tenant } = await supabase.from('tenants').select('id, nome').single()
-    if (!tenant) return
+    if (!tenant) {
+      setCarregando(false)
+      return
+    }
     setTenantNome(tenant.nome)
 
     const { data: agendamentosData } = await supabase
       .from('appointments')
       .select(`
-        id, inicio, status, preco_cobrado, precisa_transporte, endereco_coleta, service_id, professional_id,
+        id, inicio, status, preco_cobrado, precisa_transporte, endereco_coleta, service_id, professional_id, customer_id,
         customers ( nome ), pets ( nome ), services ( nome ), professionals ( nome, cor_agenda )
       `)
       .eq('tenant_id', tenant.id)
@@ -97,6 +101,7 @@ export default function DashboardPage() {
   }
 
   useEffect(() => { carregarDados() }, [dataFiltro])
+
   function abrirEdicao(agendamento: any) {
     setModalEdicao(agendamento)
     setEdServicoId(agendamento.service_id || '')
