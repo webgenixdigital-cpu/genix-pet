@@ -169,7 +169,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
       <nav className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
-        <Logo tamanho="h-16 md:h-20" />
+        <Logo tamanho="h-24 md:h-28" />
         <div className="hidden md:flex items-center gap-8">
           <a href="#dores" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Por que usar</a>
           <a href="#modulos" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Funcionalidades</a>
@@ -204,10 +204,9 @@ export default function LandingPage() {
           </div>
 
           <div className="rounded-2xl overflow-hidden shadow-2xl border border-gray-100">
-            {/* Substitua por um print real do dashboard do Genix Pet */}
             <img
-              src="https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/watermarked_img_13082130160708969679.png"
-              alt="Painel do Genix Pet"
+              src="https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/foto-site/ChatGPT%20Image%201%20de%20ago.%20de%202026,%2009_39_42.png"
+              alt="Genix Pet"
               className="w-full h-full object-cover"
             />
           </div>

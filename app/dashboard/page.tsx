@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
 type Agendamento = {
@@ -34,338 +35,310 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const STATUS_CORES: Record<string, string> = {
-  em_espera: 'bg-yellow-100 text-yellow-700',
-  agendado: 'bg-gray-100 text-gray-600',
-  confirmado: 'bg-blue-100 text-blue-600',
-  em_atendimento: 'bg-purple-100 text-purple-600',
-  concluido: 'bg-green-100 text-green-600',
-  cancelado: 'bg-red-100 text-red-600',
-  faltou: 'bg-red-100 text-red-600',
+  em_espera: 'bg-yellow-400',
+  agendado: 'bg-gray-400',
+  confirmado: 'bg-blue-500',
+  em_atendimento: 'bg-purple-500',
+  concluido: 'bg-green-500',
+  cancelado: 'bg-red-400',
+  faltou: 'bg-red-400',
 }
 
+function IconeMais() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function Sparkline({ valores, cor = '#2563eb' }: { valores: number[]; cor?: string }) {
+  if (valores.length < 2) return null
+  const max = Math.max(...valores, 1)
+  const min = Math.min(...valores, 0)
+  const range = max - min || 1
+  const pontos = valores.map((v, i) => {
+    const x = (i / (valores.length - 1)) * 60
+    const y = 20 - ((v - min) / range) * 18
+    return `${x},${y}`
+  }).join(' ')
+
+  return (
+    <svg width="60" height="20" viewBox="0 0 60 20">
+      <polyline points={pontos} fill="none" stroke={cor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 export default function DashboardPage() {
   const [tenantNome, setTenantNome] = useState('')
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
-  const [servicos, setServicos] = useState<{ id: string; nome: string; preco: number }[]>([])
-  const [profissionais, setProfissionais] = useState<{ id: string; nome: string }[]>([])
-  const [modalEdicao, setModalEdicao] = useState<Agendamento | null>(null)
-  const [edServicoId, setEdServicoId] = useState('')
-  const [edProfissionalId, setEdProfissionalId] = useState('')
-  const [edPrecisaTransporte, setEdPrecisaTransporte] = useState(false)
-  const [edEnderecoColeta, setEdEnderecoColeta] = useState('')
-  const [edSalvando, setEdSalvando] = useState(false)
-  const [despesasHoje, setDespesasHoje] = useState(0)
+  const [receitaHistorico, setReceitaHistorico] = useState<number[]>([])
+  const [produtosEstoqueBaixo, setProdutosEstoqueBaixo] = useState<{ nome: string; estoque_atual: number }[]>([])
+  const [contasPendentes, setContasPendentes] = useState(0)
+  const [totalHoje, setTotalHoje] = useState({ recebido: 0, aReceber: 0, despesas: 0 })
+  const [totalOntem, setTotalOntem] = useState({ recebido: 0, aReceber: 0 })
   const [carregando, setCarregando] = useState(true)
-  const [dataFiltro, setDataFiltro] = useState(formatarDataISO(new Date()))
-  const [filtroStatus, setFiltroStatus] = useState('todos')
-  const [filtroTransporte, setFiltroTransporte] = useState(false)
+  const [dataFiltro] = useState(formatarDataISO(new Date()))
   const supabase = createClient()
 
   async function carregarDados() {
     setCarregando(true)
-    const { data: tenant } = await supabase.from('tenants').select('id, nome').single()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCarregando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id, nome')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setCarregando(false)
       return
     }
     setTenantNome(tenant.nome)
 
-    const { data: agendamentosData } = await supabase
-      .from('appointments')
-      .select(`
-        id, inicio, status, preco_cobrado, precisa_transporte, endereco_coleta, service_id, professional_id, customer_id,
-        customers ( nome ), pets ( nome ), services ( nome ), professionals ( nome, cor_agenda )
-      `)
-      .eq('tenant_id', tenant.id)
-      .gte('inicio', dataFiltro + 'T00:00:00')
-      .lte('inicio', dataFiltro + 'T23:59:59')
-      .order('inicio')
+    const ontem = formatarDataISO(new Date(Date.now() - 24 * 60 * 60 * 1000))
 
-    const { data: financeiroData } = await supabase
-      .from('financial_transactions')
-      .select('valor')
-      .eq('tenant_id', tenant.id)
-      .eq('tipo', 'despesa')
-      .eq('data_lancamento', dataFiltro)
+    const [agendamentosRes, financeiroHojeRes, financeiroOntemRes, financeiro7DiasRes, produtosRes] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select(`
+          id, inicio, status, preco_cobrado, precisa_transporte, endereco_coleta, service_id, professional_id, customer_id,
+          customers ( nome ), pets ( nome ), services ( nome ), professionals ( nome, cor_agenda )
+        `)
+        .eq('tenant_id', tenant.id)
+        .gte('inicio', dataFiltro + 'T00:00:00')
+        .lte('inicio', dataFiltro + 'T23:59:59')
+        .order('inicio'),
+      supabase
+        .from('financial_transactions')
+        .select('tipo, valor, status')
+        .eq('tenant_id', tenant.id)
+        .eq('data_lancamento', dataFiltro),
+      supabase
+        .from('financial_transactions')
+        .select('tipo, valor, status')
+        .eq('tenant_id', tenant.id)
+        .eq('data_lancamento', ontem),
+      supabase
+        .from('financial_transactions')
+        .select('valor, data_lancamento')
+        .eq('tenant_id', tenant.id)
+        .eq('tipo', 'receita')
+        .eq('status', 'pago')
+        .gte('data_lancamento', formatarDataISO(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)))
+        .lte('data_lancamento', dataFiltro),
+      supabase
+        .from('products')
+        .select('nome, estoque_atual, estoque_minimo')
+        .eq('tenant_id', tenant.id)
+        .eq('ativo', true),
+    ])
 
-    const { data: servicosData } = await supabase
-      .from('services').select('id, nome, preco').eq('tenant_id', tenant.id).eq('ativo', true).order('nome')
-    const { data: profissionaisData } = await supabase
-      .from('professionals').select('id, nome').eq('tenant_id', tenant.id).eq('ativo', true).order('nome')
+    setAgendamentos((agendamentosRes.data as any) || [])
 
-    setServicos(servicosData || [])
-    setProfissionais(profissionaisData || [])
-    setAgendamentos((agendamentosData as any) || [])
-    setDespesasHoje((financeiroData || []).reduce((s, f) => s + Number(f.valor), 0))
+    const finHoje = financeiroHojeRes.data || []
+    const finOntem = financeiroOntemRes.data || []
+
+    setTotalHoje({
+      recebido: finHoje.filter(f => f.tipo === 'receita' && f.status === 'pago').reduce((s, f) => s + Number(f.valor), 0),
+      aReceber: finHoje.filter(f => f.tipo === 'receita' && f.status === 'pendente').reduce((s, f) => s + Number(f.valor), 0),
+      despesas: finHoje.filter(f => f.tipo === 'despesa').reduce((s, f) => s + Number(f.valor), 0),
+    })
+    setTotalOntem({
+      recebido: finOntem.filter(f => f.tipo === 'receita' && f.status === 'pago').reduce((s, f) => s + Number(f.valor), 0),
+      aReceber: finOntem.filter(f => f.tipo === 'receita' && f.status === 'pendente').reduce((s, f) => s + Number(f.valor), 0),
+    })
+    setContasPendentes(finHoje.filter(f => f.tipo === 'receita' && f.status === 'pendente').length)
+
+    const porDia: Record<string, number> = {}
+    ;(financeiro7DiasRes.data || []).forEach(f => {
+      porDia[f.data_lancamento] = (porDia[f.data_lancamento] || 0) + Number(f.valor)
+    })
+    const ultimosDias: number[] = []
+    for (let i = 6; i >= 0; i--) {
+      const dia = formatarDataISO(new Date(Date.now() - i * 24 * 60 * 60 * 1000))
+      ultimosDias.push(porDia[dia] || 0)
+    }
+    setReceitaHistorico(ultimosDias)
+
+    const produtosBaixos = (produtosRes.data || []).filter(p => Number(p.estoque_atual) <= Number(p.estoque_minimo))
+    setProdutosEstoqueBaixo(produtosBaixos.map(p => ({ nome: p.nome, estoque_atual: p.estoque_atual })))
+
     setCarregando(false)
   }
 
-  useEffect(() => { carregarDados() }, [dataFiltro])
-
-  function abrirEdicao(agendamento: any) {
-    setModalEdicao(agendamento)
-    setEdServicoId(agendamento.service_id || '')
-    setEdProfissionalId(agendamento.professional_id || '')
-    setEdPrecisaTransporte(agendamento.precisa_transporte || false)
-    setEdEnderecoColeta(agendamento.endereco_coleta || '')
-  }
-
-  async function salvarEdicao() {
-    if (!modalEdicao) return
-    setEdSalvando(true)
-
-    const servico = servicos.find(s => s.id === edServicoId)
-
-    await supabase
-      .from('appointments')
-      .update({
-        service_id: edServicoId || null,
-        professional_id: edProfissionalId || null,
-        preco_cobrado: servico?.preco ?? modalEdicao.preco_cobrado,
-        precisa_transporte: edPrecisaTransporte,
-        endereco_coleta: edPrecisaTransporte ? edEnderecoColeta : null,
-        endereco_entrega: edPrecisaTransporte ? edEnderecoColeta : null,
-      })
-      .eq('id', modalEdicao.id)
-
-    setEdSalvando(false)
-    setModalEdicao(null)
-    carregarDados()
-  }
-
-  async function excluirAgendamento() {
-    if (!modalEdicao) return
-    if (!confirm('Tem certeza que deseja excluir este agendamento?')) return
-
-    setEdSalvando(true)
-    await supabase.from('appointments').update({ status: 'cancelado' }).eq('id', modalEdicao.id)
-    setEdSalvando(false)
-    setModalEdicao(null)
-    carregarDados()
-  }
-
+  useEffect(() => { carregarDados() }, [])
   const agendamentosValidos = agendamentos.filter(a => a.status !== 'cancelado' && a.status !== 'faltou')
-  const totalAReceber = agendamentosValidos
-    .filter(a => a.status !== 'concluido')
-    .reduce((s, a) => s + Number(a.preco_cobrado || 0), 0)
-  const totalRecebidoHoje = agendamentos
-    .filter(a => a.status === 'concluido')
-    .reduce((s, a) => s + Number(a.preco_cobrado || 0), 0)
-  const transportesHoje = agendamentosValidos.filter(a => a.precisa_transporte)
-  const aguardandoAprovacao = agendamentos.filter(a => a.status === 'em_espera').length
+  const aguardandoAprovacao = agendamentos.filter(a => a.status === 'em_espera')
+  const confirmados = agendamentos.filter(a => ['confirmado', 'em_atendimento', 'concluido'].includes(a.status))
+  const cancelamentos = agendamentos.filter(a => a.status === 'cancelado' || a.status === 'faltou')
 
-  const agendamentosFiltrados = agendamentosValidos.filter(a => {
-    if (filtroStatus !== 'todos' && a.status !== filtroStatus) return false
-    if (filtroTransporte && !a.precisa_transporte) return false
-    return true
-  })
+  const diaSemana = new Date().toLocaleDateString('pt-BR', { weekday: 'long' })
+  const horaAtual = new Date().getHours()
+  const saudacao = horaAtual < 12 ? 'Bom dia' : horaAtual < 18 ? 'Boa tarde' : 'Boa noite'
+
+  function variacao(hoje: number, ontem: number): { texto: string; positivo: boolean } | null {
+    if (ontem === 0) return null
+    const diff = ((hoje - ontem) / ontem) * 100
+    return { texto: `${diff >= 0 ? '+' : ''}${diff.toFixed(0)}% vs ontem`, positivo: diff >= 0 }
+  }
+
+  const alertas = [
+    aguardandoAprovacao.length > 0 && {
+      cor: 'bg-yellow-50 border-yellow-100 text-yellow-700',
+      texto: `${aguardandoAprovacao.length} cliente(s) aguardando confirmacao`,
+      link: '/dashboard/agenda',
+    },
+    contasPendentes > 0 && {
+      cor: 'bg-orange-50 border-orange-100 text-orange-700',
+      texto: `${contasPendentes} pagamento(s) pendente(s) hoje`,
+      link: '/dashboard/caixa',
+    },
+    produtosEstoqueBaixo.length > 0 && {
+      cor: 'bg-red-50 border-red-100 text-red-700',
+      texto: `${produtosEstoqueBaixo.length} produto(s) com estoque baixo`,
+      link: '/dashboard/produtos',
+    },
+  ].filter(Boolean) as { cor: string; texto: string; link: string }[]
+
+  const atalhos = [
+    { label: 'Novo Agendamento', href: '/dashboard/agenda/novo' },
+    { label: 'Novo Cliente', href: '/dashboard/clientes' },
+    { label: 'Novo Produto', href: '/dashboard/produtos' },
+    { label: 'Nova Despesa', href: '/dashboard/caixa' },
+  ]
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Ola, {tenantNome}!</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Resumo do dia</p>
-        </div>
-        <input
-          type="date"
-          value={dataFiltro}
-          onChange={e => setDataFiltro(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold text-gray-900">{saudacao}, {tenantNome}! 👋</h2>
+        <p className="text-sm text-gray-500 mt-1 capitalize">
+          Hoje é {diaSemana} • {agendamentosValidos.length} agendamentos • {confirmados.length} confirmados
+          {aguardandoAprovacao.length > 0 && ` • ${aguardandoAprovacao.length} aguardando confirmacao`}
+          {cancelamentos.length > 0 && ` • ${cancelamentos.length} cancelamento(s)`}
+        </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white border border-gray-100 rounded-2xl p-4">
-          <p className="text-xs text-gray-400">Agendamentos do dia</p>
-          <p className="text-2xl font-semibold text-gray-900 mt-1">{agendamentosValidos.length}</p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4">
-          <p className="text-xs text-gray-400">A receber hoje</p>
-          <p className="text-2xl font-semibold text-blue-600 mt-1">
-            R$ {totalAReceber.toFixed(2).replace('.', ',')}
-          </p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4">
-          <p className="text-xs text-gray-400">Recebido hoje</p>
-          <p className="text-2xl font-semibold text-green-600 mt-1">
-            R$ {totalRecebidoHoje.toFixed(2).replace('.', ',')}
-          </p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4">
-          <p className="text-xs text-gray-400">Despesas do dia</p>
-          <p className="text-2xl font-semibold text-red-500 mt-1">
-            R$ {despesasHoje.toFixed(2).replace('.', ',')}
-          </p>
-        </div>
-      </div>
-
-      {(aguardandoAprovacao > 0 || transportesHoje.length > 0) && (
-        <div className="flex gap-3 mb-6">
-          {aguardandoAprovacao > 0 && (
-            <div className="bg-yellow-50 border border-yellow-100 rounded-xl px-4 py-2.5 text-sm text-yellow-700">
-              ⏳ {aguardandoAprovacao} agendamento(s) aguardando aprovacao
-            </div>
-          )}
-          {transportesHoje.length > 0 && (
-            <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-2.5 text-sm text-orange-700">
-              🚐 {transportesHoje.length} precisam de transporte hoje
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center gap-3 mb-4">
-        <select
-          value={filtroStatus}
-          onChange={e => setFiltroStatus(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="todos">Todos os status</option>
-          {Object.entries(STATUS_LABELS).map(([valor, label]) => (
-            <option key={valor} value={valor}>{label}</option>
-          ))}
-        </select>
-
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filtroTransporte}
-            onChange={e => setFiltroTransporte(e.target.checked)}
-            className="w-4 h-4"
-          />
-          Somente com transporte
-        </label>
-      </div>
-
-      {carregando ? (
-        <p className="text-sm text-gray-400">Carregando...</p>
-      ) : agendamentosFiltrados.length === 0 ? (
-        <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center">
-          <p className="text-gray-400 text-sm">Nenhum agendamento encontrado com esse filtro.</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {agendamentosFiltrados.map(a => (
-            <div key={a.id} className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-900 w-14">
-                {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
-                style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
-              >
-                {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
-              </div>
-
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">
-                  {a.pets?.nome} — {a.services?.nome}
-                </p>
-                <p className="text-xs text-gray-400">{a.customers?.nome}</p>
-              </div>
-
-              {a.precisa_transporte && (
-                <span className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded-full">🚐 Transporte</span>
-              )}
-
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_CORES[a.status]}`}>
-                {STATUS_LABELS[a.status]}
-              </span>
-
-              <p className="text-sm font-medium text-gray-900 w-20 text-right">
-                R$ {Number(a.preco_cobrado || 0).toFixed(2).replace('.', ',')}
-              </p>
-
-              <button
-                onClick={() => abrirEdicao(a)}
-                className="text-xs text-blue-600 hover:underline whitespace-nowrap"
-              >
-                Editar
-              </button>
-            </div>
+      {alertas.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          {alertas.map((a, i) => (
+            <Link
+              key={i}
+              href={a.link}
+              className={`border rounded-xl p-3.5 flex items-center justify-between gap-3 text-sm ${a.cor}`}
+            >
+              <span className="font-medium">{a.texto}</span>
+              <span className="text-xs whitespace-nowrap underline">Resolver</span>
+            </Link>
           ))}
         </div>
       )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-400">Recebido hoje</p>
+            <Sparkline valores={receitaHistorico} cor="#16a34a" />
+          </div>
+          <p className="text-xl font-semibold text-green-600">R$ {totalHoje.recebido.toFixed(2).replace('.', ',')}</p>
+          {variacao(totalHoje.recebido, totalOntem.recebido) && (
+            <p className={`text-xs mt-1 ${variacao(totalHoje.recebido, totalOntem.recebido)!.positivo ? 'text-green-600' : 'text-red-500'}`}>
+              {variacao(totalHoje.recebido, totalOntem.recebido)!.texto}
+            </p>
+          )}
+        </div>
 
-      {modalEdicao && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">Editar agendamento</h3>
-            <p className="text-sm text-gray-500 mb-4">{modalEdicao.pets?.nome} — {modalEdicao.customers?.nome}</p>
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md transition-shadow">
+          <p className="text-xs text-gray-400 mb-2">A receber hoje</p>
+          <p className="text-xl font-semibold text-blue-600">R$ {totalHoje.aReceber.toFixed(2).replace('.', ',')}</p>
+          {variacao(totalHoje.aReceber, totalOntem.aReceber) && (
+            <p className={`text-xs mt-1 ${variacao(totalHoje.aReceber, totalOntem.aReceber)!.positivo ? 'text-green-600' : 'text-red-500'}`}>
+              {variacao(totalHoje.aReceber, totalOntem.aReceber)!.texto}
+            </p>
+          )}
+        </div>
 
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md transition-shadow">
+          <p className="text-xs text-gray-400 mb-2">Despesas hoje</p>
+          <p className="text-xl font-semibold text-red-500">R$ {totalHoje.despesas.toFixed(2).replace('.', ',')}</p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 hover:shadow-md transition-shadow">
+          <p className="text-xs text-blue-600 mb-2">Lucro previsto hoje</p>
+          <p className="text-xl font-semibold text-blue-700">
+            R$ {(totalHoje.recebido + totalHoje.aReceber - totalHoje.despesas).toFixed(2).replace('.', ',')}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+        {atalhos.map(a => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="bg-white border border-gray-100 rounded-xl p-4 flex items-center gap-3 hover:border-blue-300 hover:shadow-sm transition-all"
+          >
+            <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+              <IconeMais />
+            </span>
+            <span className="text-sm font-medium text-gray-700">{a.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+        <h3 className="text-sm font-medium text-gray-900 mb-4">Agenda de hoje</h3>
+
+        {carregando ? (
+          <p className="text-sm text-gray-400">Carregando...</p>
+        ) : agendamentosValidos.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">Nenhum agendamento para hoje.</p>
+        ) : (
+          <div className="relative pl-4">
+            <div className="absolute left-4 top-2 bottom-2 w-px bg-gray-100" />
             <div className="flex flex-col gap-4">
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">Servico</label>
-                <select
-                  value={edServicoId}
-                  onChange={e => setEdServicoId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {servicos.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                </select>
-              </div>
+              {agendamentosValidos.map(a => (
+                <div key={a.id} className="relative flex items-start gap-4 pl-6">
+                  <span className={`absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full ${STATUS_CORES[a.status]}`} />
 
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">Profissional</label>
-                <select
-                  value={edProfissionalId}
-                  onChange={e => setEdProfissionalId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sem profissional definido</option>
-                  {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
-              </div>
+                  <span className="text-xs font-medium text-gray-500 w-12 flex-shrink-0 pt-0.5">
+                    {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={edPrecisaTransporte}
-                  onChange={e => setEdPrecisaTransporte(e.target.checked)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm text-gray-700">Precisa de transporte</span>
-              </label>
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
+                    style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
+                  >
+                    {a.pets?.nome?.charAt(0).toUpperCase() || '?'}
+                  </div>
 
-              {edPrecisaTransporte && (
-                <div>
-                  <label className="text-sm text-gray-600 mb-1 block">Endereco</label>
-                  <input
-                    type="text"
-                    value={edEnderecoColeta}
-                    onChange={e => setEdEnderecoColeta(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {a.pets?.nome} — {a.services?.nome}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {a.customers?.nome} {a.professionals?.nome && `• ${a.professionals.nome}`}
+                      {a.precisa_transporte && ' • 🚐 Transporte'}
+                    </p>
+                  </div>
+
+                  <span className="text-xs px-2 py-1 rounded-full bg-gray-50 text-gray-600 whitespace-nowrap">
+                    {STATUS_LABELS[a.status]}
+                  </span>
+
+                  <p className="text-sm font-medium text-gray-900 w-16 text-right flex-shrink-0">
+                    R$ {Number(a.preco_cobrado || 0).toFixed(0)}
+                  </p>
                 </div>
-              )}
-
-              <div className="flex gap-3 mt-2">
-                <button
-                  onClick={() => setModalEdicao(null)}
-                  className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={excluirAgendamento}
-                  disabled={edSalvando}
-                  className="flex-1 border border-red-200 text-red-600 text-sm py-2 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
-                >
-                  Excluir
-                </button>
-                <button
-                  onClick={salvarEdicao}
-                  disabled={edSalvando}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {edSalvando ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
