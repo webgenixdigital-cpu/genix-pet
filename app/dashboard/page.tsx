@@ -101,6 +101,13 @@ export default function DashboardPage() {
   const [receita30Dias, setReceita30Dias] = useState<number[]>([])
   const [agendamentos30Dias, setAgendamentos30Dias] = useState<number[]>([])
   const [receitaPorCategoria, setReceitaPorCategoria] = useState<{ categoria: string; valor: number }[]>([])
+  const [indicadoresMes, setIndicadoresMes] = useState({
+    faturamento: 0, faturamentoAnterior: 0,
+    lucro: 0, lucroAnterior: 0,
+    ticketMedio: 0,
+    novosClientes: 0,
+    pacotesAtivos: 0,
+  })
   const [produtosEstoqueBaixo, setProdutosEstoqueBaixo] = useState<{ nome: string; estoque_atual: number }[]>([])
   const [contasPendentes, setContasPendentes] = useState(0)
   const [totalHoje, setTotalHoje] = useState({ recebido: 0, aReceber: 0, despesas: 0 })
@@ -131,7 +138,7 @@ export default function DashboardPage() {
 
     const ontem = formatarDataISO(new Date(Date.now() - 24 * 60 * 60 * 1000))
 
-    const [agendamentosRes, financeiroHojeRes, financeiroOntemRes, financeiro7DiasRes, produtosRes, financeiro30DiasRes, agendamentos30DiasRes] = await Promise.all([
+    const [agendamentosRes, financeiroHojeRes, financeiroOntemRes, financeiro7DiasRes, produtosRes, financeiro30DiasRes, agendamentos30DiasRes, financeiroMesRes, financeiroMesAnteriorRes, clientesMesRes, pacotesAtivosRes] = await Promise.all([
       supabase
         .from('appointments')
         .select(`
@@ -180,6 +187,30 @@ export default function DashboardPage() {
         .neq('status', 'cancelado')
         .gte('inicio', formatarDataISO(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)) + 'T00:00:00')
         .lte('inicio', dataFiltro + 'T23:59:59'),
+      supabase
+        .from('financial_transactions')
+        .select('tipo, valor')
+        .eq('tenant_id', tenant.id)
+        .eq('status', 'pago')
+        .gte('data_lancamento', formatarDataISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
+        .lte('data_lancamento', dataFiltro),
+      supabase
+        .from('financial_transactions')
+        .select('tipo, valor')
+        .eq('tenant_id', tenant.id)
+        .eq('status', 'pago')
+        .gte('data_lancamento', formatarDataISO(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)))
+        .lte('data_lancamento', formatarDataISO(new Date(new Date().getFullYear(), new Date().getMonth(), 0))),
+      supabase
+        .from('customers')
+        .select('id, criado_em')
+        .eq('tenant_id', tenant.id)
+        .gte('criado_em', formatarDataISO(new Date(new Date().getFullYear(), new Date().getMonth(), 1))),
+      supabase
+        .from('customer_packages')
+        .select('id')
+        .eq('tenant_id', tenant.id)
+        .eq('status', 'ativo'),
     ])
 
     setAgendamentos((agendamentosRes.data as any) || [])
@@ -243,6 +274,28 @@ export default function DashboardPage() {
       ultimos30Agend.push(porDiaAgend[dia] || 0)
     }
     setAgendamentos30Dias(ultimos30Agend)
+
+    const finMes = (financeiroMesRes as any)?.data || []
+    const finMesAnterior = (financeiroMesAnteriorRes as any)?.data || []
+    const clientesMes = (clientesMesRes as any)?.data || []
+    const pacotesAtivos = (pacotesAtivosRes as any)?.data || []
+
+    const faturamentoMes = finMes.filter((f: any) => f.tipo === 'receita').reduce((s: number, f: any) => s + Number(f.valor), 0)
+    const despesasMes = finMes.filter((f: any) => f.tipo === 'despesa').reduce((s: number, f: any) => s + Number(f.valor), 0)
+    const faturamentoMesAnterior = finMesAnterior.filter((f: any) => f.tipo === 'receita').reduce((s: number, f: any) => s + Number(f.valor), 0)
+    const despesasMesAnterior = finMesAnterior.filter((f: any) => f.tipo === 'despesa').reduce((s: number, f: any) => s + Number(f.valor), 0)
+
+    const qtdVendasMes = finMes.filter((f: any) => f.tipo === 'receita').length
+
+    setIndicadoresMes({
+      faturamento: faturamentoMes,
+      faturamentoAnterior: faturamentoMesAnterior,
+      lucro: faturamentoMes - despesasMes,
+      lucroAnterior: faturamentoMesAnterior - despesasMesAnterior,
+      ticketMedio: qtdVendasMes > 0 ? faturamentoMes / qtdVendasMes : 0,
+      novosClientes: clientesMes.length,
+      pacotesAtivos: pacotesAtivos.length,
+    })
 
     setCarregando(false)
   }
@@ -489,6 +542,46 @@ const pendencias = [
               })}
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-sm font-medium text-gray-900 mb-3">Indicadores do mes</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Faturamento do mes</p>
+            <p className="text-lg font-semibold text-gray-900">R$ {indicadoresMes.faturamento.toFixed(2).replace('.', ',')}</p>
+            {variacao(indicadoresMes.faturamento, indicadoresMes.faturamentoAnterior) && (
+              <p className={`text-xs mt-1 ${variacao(indicadoresMes.faturamento, indicadoresMes.faturamentoAnterior)!.positivo ? 'text-green-600' : 'text-red-500'}`}>
+                {variacao(indicadoresMes.faturamento, indicadoresMes.faturamentoAnterior)!.texto.replace('vs ontem', 'vs mes anterior')}
+              </p>
+            )}
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Lucro do mes</p>
+            <p className="text-lg font-semibold text-gray-900">R$ {indicadoresMes.lucro.toFixed(2).replace('.', ',')}</p>
+            {variacao(indicadoresMes.lucro, indicadoresMes.lucroAnterior) && (
+              <p className={`text-xs mt-1 ${variacao(indicadoresMes.lucro, indicadoresMes.lucroAnterior)!.positivo ? 'text-green-600' : 'text-red-500'}`}>
+                {variacao(indicadoresMes.lucro, indicadoresMes.lucroAnterior)!.texto.replace('vs ontem', 'vs mes anterior')}
+              </p>
+            )}
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Ticket medio</p>
+            <p className="text-lg font-semibold text-gray-900">R$ {indicadoresMes.ticketMedio.toFixed(2).replace('.', ',')}</p>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Novos clientes</p>
+            <p className="text-lg font-semibold text-gray-900">{indicadoresMes.novosClientes}</p>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <p className="text-xs text-gray-400 mb-1">Pacotes ativos</p>
+            <p className="text-lg font-semibold text-gray-900">{indicadoresMes.pacotesAtivos}</p>
+          </div>
         </div>
       </div>
     </div>
