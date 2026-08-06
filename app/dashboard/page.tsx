@@ -357,6 +357,51 @@ const pendencias = [
     { label: 'Nova Despesa', href: '/dashboard/caixa' },
   ]
 
+  const insights: { texto: string; link: string }[] = []
+
+  const variacaoFaturamento = variacao(indicadoresMes.faturamento, indicadoresMes.faturamentoAnterior)
+  if (variacaoFaturamento) {
+    if (!variacaoFaturamento.positivo) {
+      insights.push({
+        texto: `Seu faturamento esta ${variacaoFaturamento.texto.replace('vs ontem', '')} em relacao ao mes anterior.`,
+        link: '/dashboard/financeiro',
+      })
+    } else if (parseFloat(variacaoFaturamento.texto) >= 10) {
+      insights.push({
+        texto: `Seu faturamento cresceu ${variacaoFaturamento.texto.replace('vs ontem', '')} em relacao ao mes anterior. Continue assim!`,
+        link: '/dashboard/financeiro',
+      })
+    }
+  }
+
+  produtosEstoqueBaixo.forEach(p => {
+    insights.push({
+      texto: `Seu estoque de ${p.nome} esta acabando (restam ${p.estoque_atual}).`,
+      link: '/dashboard/produtos',
+    })
+  })
+
+  if (aguardandoAprovacao.length >= 3) {
+    insights.push({
+      texto: `Voce tem ${aguardandoAprovacao.length} agendamentos aguardando aprovacao. Confirme para nao perder clientes.`,
+      link: '/dashboard/agenda',
+    })
+  }
+
+  if (indicadoresMes.pacotesAtivos === 0) {
+    insights.push({
+      texto: 'Voce ainda nao vendeu nenhum pacote este mes. Pacotes ajudam a fidelizar clientes.',
+      link: '/dashboard/pacotes',
+    })
+  }
+
+  if (indicadoresMes.novosClientes >= 5) {
+    insights.push({
+      texto: `Voce ganhou ${indicadoresMes.novosClientes} novos clientes este mes. Otimo trabalho!`,
+      link: '/dashboard/clientes',
+    })
+  }
+
   return (
     <div>
       <div className="mb-6">
@@ -451,6 +496,21 @@ const pendencias = [
           </Link>
         ))}
       </div>
+{insights.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-6">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">💡 Insights</h3>
+          <div className="flex flex-col gap-3">
+            {insights.map((ins, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl p-3">
+                <p className="text-sm text-gray-700">{ins.texto}</p>
+                <Link href={ins.link} className="text-xs text-blue-600 hover:underline whitespace-nowrap flex-shrink-0">
+                  Ver detalhes
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-gray-100 rounded-2xl p-5">
         <h3 className="text-sm font-medium text-gray-900 mb-4">Agenda de hoje</h3>
