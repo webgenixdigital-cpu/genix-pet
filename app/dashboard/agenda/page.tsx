@@ -36,7 +36,10 @@ const PROXIMO_STATUS: Record<string, string> = {
 }
 
 function formatarDataISO(data: Date): string {
-  return data.toISOString().split('T')[0]
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
 }
 
 export default function AgendaPage() {
@@ -44,6 +47,7 @@ export default function AgendaPage() {
   const [carregando, setCarregando] = useState(true)
   const [dataFiltro, setDataFiltro] = useState(formatarDataISO(new Date()))
   const [periodoFiltro, setPeriodoFiltro] = useState<'dia' | 'semana' | 'mes'>('dia')
+  const [offsetCalendario, setOffsetCalendario] = useState(0)
   const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
   const supabase = createClient()
 
@@ -70,7 +74,18 @@ export default function AgendaPage() {
 
   async function carregarAgendamentos() {
     setCarregando(true)
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCarregando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setCarregando(false)
       return
@@ -246,31 +261,58 @@ export default function AgendaPage() {
         ))}
       </div>
 
-      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
-        {Array.from({ length: 14 }).map((_, i) => {
-          const data = new Date()
-          data.setDate(data.getDate() + i)
-          const dataISO = formatarDataISO(data)
-          const selecionado = dataISO === dataFiltro
-          const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')
-          const diaMes = data.getDate()
+      <div className="flex items-center gap-2 mb-6">
+        <button
+          onClick={() => setOffsetCalendario(o => o - 7)}
+          className="flex-shrink-0 w-8 h-16 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-blue-300 transition-colors"
+        >
+          ‹
+        </button>
 
-          return (
-            <button
-              key={dataISO}
-              onClick={() => setDataFiltro(dataISO)}
-              className={`flex flex-col items-center justify-center flex-shrink-0 w-14 h-16 rounded-xl border transition-colors ${
-                selecionado
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-              }`}
-            >
-              <span className="text-[10px] uppercase">{diaSemana}</span>
-              <span className="text-base font-semibold">{diaMes}</span>
-            </button>
-          )
-        })}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-1">
+          {Array.from({ length: 14 }).map((_, i) => {
+            const data = new Date()
+            data.setDate(data.getDate() + offsetCalendario + i)
+            const dataISO = formatarDataISO(data)
+            const selecionado = dataISO === dataFiltro
+            const diaSemana = data.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')
+            const diaMes = data.getDate()
+            const mesAbrev = data.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
+
+            return (
+              <button
+                key={dataISO}
+                onClick={() => setDataFiltro(dataISO)}
+                className={`flex flex-col items-center justify-center flex-shrink-0 w-14 h-16 rounded-xl border transition-colors ${
+                  selecionado
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                <span className="text-[10px] uppercase">{diaSemana}</span>
+                <span className="text-base font-semibold">{diaMes}</span>
+                <span className="text-[9px] uppercase opacity-70">{mesAbrev}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        <button
+          onClick={() => setOffsetCalendario(o => o + 7)}
+          className="flex-shrink-0 w-8 h-16 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-blue-300 transition-colors"
+        >
+          ›
+        </button>
       </div>
+
+      {offsetCalendario !== 0 && (
+        <button
+          onClick={() => setOffsetCalendario(0)}
+          className="text-xs text-blue-600 hover:underline -mt-4 mb-4 block"
+        >
+          Voltar para hoje
+        </button>
+      )}
 
       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>

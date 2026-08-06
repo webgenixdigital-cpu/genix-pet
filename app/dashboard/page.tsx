@@ -21,7 +21,10 @@ type Agendamento = {
 }
 
 function formatarDataISO(data: Date): string {
-  return data.toISOString().split('T')[0]
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -51,7 +54,29 @@ function IconeMais() {
     </svg>
   )
 }
+function GraficoBarras({ valores, cor = '#2563eb' }: { valores: number[]; cor?: string }) {
+  const max = Math.max(...valores, 1)
+  const largura = 100 / valores.length
 
+  return (
+    <svg width="100%" height="80" viewBox="0 0 300 80" preserveAspectRatio="none">
+      {valores.map((v, i) => {
+        const altura = (v / max) * 70
+        return (
+          <rect
+            key={i}
+            x={i * (300 / valores.length) + 1}
+            y={80 - altura}
+            width={300 / valores.length - 2}
+            height={altura}
+            fill={cor}
+            rx="1"
+          />
+        )
+      })}
+    </svg>
+  )
+}
 function Sparkline({ valores, cor = '#2563eb' }: { valores: number[]; cor?: string }) {
   if (valores.length < 2) return null
   const max = Math.max(...valores, 1)
@@ -73,6 +98,9 @@ export default function DashboardPage() {
   const [tenantNome, setTenantNome] = useState('')
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [receitaHistorico, setReceitaHistorico] = useState<number[]>([])
+  const [receita30Dias, setReceita30Dias] = useState<number[]>([])
+  const [agendamentos30Dias, setAgendamentos30Dias] = useState<number[]>([])
+  const [receitaPorCategoria, setReceitaPorCategoria] = useState<{ categoria: string; valor: number }[]>([])
   const [produtosEstoqueBaixo, setProdutosEstoqueBaixo] = useState<{ nome: string; estoque_atual: number }[]>([])
   const [contasPendentes, setContasPendentes] = useState(0)
   const [totalHoje, setTotalHoje] = useState({ recebido: 0, aReceber: 0, despesas: 0 })
@@ -103,7 +131,7 @@ export default function DashboardPage() {
 
     const ontem = formatarDataISO(new Date(Date.now() - 24 * 60 * 60 * 1000))
 
-    const [agendamentosRes, financeiroHojeRes, financeiroOntemRes, financeiro7DiasRes, produtosRes] = await Promise.all([
+    const [agendamentosRes, financeiroHojeRes, financeiroOntemRes, financeiro7DiasRes, produtosRes, financeiro30DiasRes, agendamentos30DiasRes] = await Promise.all([
       supabase
         .from('appointments')
         .select(`
@@ -137,6 +165,21 @@ export default function DashboardPage() {
         .select('nome, estoque_atual, estoque_minimo')
         .eq('tenant_id', tenant.id)
         .eq('ativo', true),
+      supabase
+        .from('financial_transactions')
+        .select('valor, data_lancamento, categoria')
+        .eq('tenant_id', tenant.id)
+        .eq('tipo', 'receita')
+        .eq('status', 'pago')
+        .gte('data_lancamento', formatarDataISO(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)))
+        .lte('data_lancamento', dataFiltro),
+      supabase
+        .from('appointments')
+        .select('inicio')
+        .eq('tenant_id', tenant.id)
+        .neq('status', 'cancelado')
+        .gte('inicio', formatarDataISO(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)) + 'T00:00:00')
+        .lte('inicio', dataFiltro + 'T23:59:59'),
     ])
 
     setAgendamentos((agendamentosRes.data as any) || [])
@@ -168,6 +211,38 @@ export default function DashboardPage() {
 
     const produtosBaixos = (produtosRes.data || []).filter(p => Number(p.estoque_atual) <= Number(p.estoque_minimo))
     setProdutosEstoqueBaixo(produtosBaixos.map(p => ({ nome: p.nome, estoque_atual: p.estoque_atual })))
+
+    const financeiro30 = (financeiro30DiasRes as any)?.data || []
+    const porDia30: Record<string, number> = {}
+    financeiro30.forEach((f: any) => {
+      porDia30[f.data_lancamento] = (porDia30[f.data_lancamento] || 0) + Number(f.valor)
+    })
+    const ultimos30: number[] = []
+    for (let i = 29; i >= 0; i--) {
+      const dia = formatarDataISO(new Date(Date.now() - i * 24 * 60 * 60 * 1000))
+      ultimos30.push(porDia30[dia] || 0)
+    }
+    setReceita30Dias(ultimos30)
+
+    const porCategoria: Record<string, number> = {}
+    financeiro30.forEach((f: any) => {
+      const cat = f.categoria || 'Outro'
+      porCategoria[cat] = (porCategoria[cat] || 0) + Number(f.valor)
+    })
+    setReceitaPorCategoria(Object.entries(porCategoria).map(([categoria, valor]) => ({ categoria, valor })))
+
+    const agendamentos30 = (agendamentos30DiasRes as any)?.data || []
+    const porDiaAgend: Record<string, number> = {}
+    agendamentos30.forEach((a: any) => {
+      const dia = formatarDataISO(new Date(a.inicio))
+      porDiaAgend[dia] = (porDiaAgend[dia] || 0) + 1
+    })
+    const ultimos30Agend: number[] = []
+    for (let i = 29; i >= 0; i--) {
+      const dia = formatarDataISO(new Date(Date.now() - i * 24 * 60 * 60 * 1000))
+      ultimos30Agend.push(porDiaAgend[dia] || 0)
+    }
+    setAgendamentos30Dias(ultimos30Agend)
 
     setCarregando(false)
   }
@@ -205,7 +280,23 @@ export default function DashboardPage() {
       link: '/dashboard/produtos',
     },
   ].filter(Boolean) as { cor: string; texto: string; link: string }[]
-
+const pendencias = [
+    ...aguardandoAprovacao.map(a => ({
+      id: `aprovar-${a.id}`,
+      texto: `Confirmar agendamento de ${a.pets?.nome || 'pet'}`,
+      link: '/dashboard/agenda',
+    })),
+    ...(contasPendentes > 0 ? [{
+      id: 'receber-pagamentos',
+      texto: `Receber ${contasPendentes} pagamento(s) pendente(s)`,
+      link: '/dashboard/caixa',
+    }] : []),
+    ...produtosEstoqueBaixo.map(p => ({
+      id: `estoque-${p.nome}`,
+      texto: `Repor estoque de ${p.nome}`,
+      link: '/dashboard/produtos',
+    })),
+  ]
   const atalhos = [
     { label: 'Novo Agendamento', href: '/dashboard/agenda/novo' },
     { label: 'Novo Cliente', href: '/dashboard/clientes' },
@@ -274,9 +365,27 @@ export default function DashboardPage() {
           </p>
         </div>
       </div>
+{pendencias.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-6">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">Pendencias de hoje</h3>
+          <div className="flex flex-col gap-2">
+            {pendencias.map(p => (
+              <Link
+                key={p.id}
+                href={p.link}
+                className="flex items-center gap-3 text-sm text-gray-600 hover:text-blue-600 transition-colors group"
+              >
+                <span className="w-4 h-4 rounded border border-gray-300 flex-shrink-0 group-hover:border-blue-400" />
+                {p.texto}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
         {atalhos.map(a => (
+      
           <Link
             key={a.href}
             href={a.href}
@@ -338,6 +447,49 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+          <h3 className="text-sm font-medium text-gray-900 mb-1">Receita — ultimos 7 dias</h3>
+          <p className="text-xs text-gray-400 mb-3">
+            Total: R$ {receita30Dias.reduce((s, v) => s + v, 0).toFixed(2).replace('.', ',')}
+          </p>
+          <GraficoBarras valores={receita30Dias} cor="#16a34a" />
+        </div>
+
+        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+          <h3 className="text-sm font-medium text-gray-900 mb-1">Agendamentos — ultimos 7 dias</h3>
+          <p className="text-xs text-gray-400 mb-3">
+            Total: {agendamentos30Dias.reduce((s, v) => s + v, 0)} agendamentos
+          </p>
+          <GraficoBarras valores={agendamentos30Dias} cor="#2563eb" />
+        </div>
+
+        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">Receita por categoria</h3>
+          {receitaPorCategoria.length === 0 ? (
+            <p className="text-xs text-gray-400">Sem dados no periodo.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {receitaPorCategoria.map(c => {
+                const total = receitaPorCategoria.reduce((s, x) => s + x.valor, 0)
+                const pct = total > 0 ? (c.valor / total) * 100 : 0
+                return (
+                  <div key={c.categoria}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-600">{c.categoria}</span>
+                      <span className="text-gray-400">R$ {c.valor.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

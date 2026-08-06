@@ -65,7 +65,10 @@ function gerarHorarios(inicio: string, fim: string, duracaoMin: number): string[
 }
 
 function formatarDataISO(data: Date): string {
-  return data.toISOString().split('T')[0]
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
 }
 export default function AgendarPage() {
   const params = useParams()

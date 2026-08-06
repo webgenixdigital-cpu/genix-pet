@@ -22,7 +22,10 @@ type Cliente = { id: string; nome: string }
 const FORMAS_PAGAMENTO = ['Dinheiro', 'Pix', 'Cartao de credito', 'Cartao de debito', 'Transferencia']
 
 function formatarDataISO(data: Date): string {
-  return data.toISOString().split('T')[0]
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
 }
 
 function formatarMoeda(valor: number): string {
