@@ -231,7 +231,23 @@ export default function AgendaPage() {
     await supabase.from('appointments').update({ status: 'faltou' }).eq('id', id)
     carregarAgendamentos()
   }
+function enviarLembreteRapido(a: Agendamento) {
+    const telefone = (a.customers?.telefone || '').replace(/\D/g, '')
+    if (!telefone) {
+      alert('Cliente sem telefone cadastrado.')
+      return
+    }
 
+    const telefoneComDDI = telefone.startsWith('55') ? telefone : `55${telefone}`
+
+    const dataFormatada = new Date(a.inicio).toLocaleDateString('pt-BR')
+    const horarioFormatado = new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+    const mensagem = `Ola! Passando para lembrar do agendamento de amanha:\n\n🐾 Pet: ${a.pets?.nome}\n✂️ Servico: ${a.services?.nome}\n📅 Data: ${dataFormatada}\n🕐 Horario: ${horarioFormatado}\n\nContamos com voce! Caso precise remarcar, e so nos avisar.`
+
+    const link = `https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`
+    window.open(link, '_blank')
+  }
   function abrirReagendar(a: Agendamento) {
     setModalReagendar(a)
     setNovaData(formatarDataISO(new Date(a.inicio)))
@@ -472,6 +488,12 @@ export default function AgendaPage() {
                         className="text-[11px] text-blue-600 hover:underline mt-1 block w-full text-center"
                       >
                         🔄 Reagendar
+                      </button>
+                      <button
+                        onClick={() => enviarLembreteRapido(a)}
+                        className="text-[11px] text-green-600 hover:underline mt-1 block w-full text-center"
+                      >
+                        💬 Lembrete WhatsApp
                       </button>
                     </div>
                   ))}
