@@ -167,6 +167,7 @@ export default function DashboardLayout({
     { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa', icon: '💵', liberado: true },
     { id: 'relatorio-fiscal', href: '/dashboard/relatorio-fiscal', label: 'Relatorio Fiscal', icon: '📄', liberado: permissoes.tem_modulo_financeiro },
     { id: 'configuracoes', href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️', liberado: true },
+    { id: 'suporte', href: '/dashboard/suporte', label: 'Suporte', icon: '🎧', liberado: true },
   ]
 
   return (
