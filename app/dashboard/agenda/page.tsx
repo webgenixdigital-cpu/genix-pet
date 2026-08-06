@@ -49,6 +49,10 @@ export default function AgendaPage() {
   const [periodoFiltro, setPeriodoFiltro] = useState<'dia' | 'semana' | 'mes'>('dia')
   const [offsetCalendario, setOffsetCalendario] = useState(0)
   const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
+  const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
+  const [novaData, setNovaData] = useState('')
+  const [novoHorario, setNovoHorario] = useState('')
+  const [reagendando, setReagendando] = useState(false)
   const supabase = createClient()
 
   function calcularIntervalo() {
@@ -204,6 +208,33 @@ export default function AgendaPage() {
 
   async function marcarFalta(id: string) {
     await supabase.from('appointments').update({ status: 'faltou' }).eq('id', id)
+    carregarAgendamentos()
+  }
+
+  function abrirReagendar(a: Agendamento) {
+    setModalReagendar(a)
+    setNovaData(formatarDataISO(new Date(a.inicio)))
+    setNovoHorario(new Date(a.inicio).toTimeString().slice(0, 5))
+  }
+
+  async function confirmarReagendamento() {
+    if (!modalReagendar || !novaData || !novoHorario) return
+    setReagendando(true)
+
+    const duracaoMs = new Date(modalReagendar.fim).getTime() - new Date(modalReagendar.inicio).getTime()
+    const novoInicio = new Date(`${novaData}T${novoHorario}:00`)
+    const novoFim = new Date(novoInicio.getTime() + duracaoMs)
+
+    await supabase
+      .from('appointments')
+      .update({
+        inicio: novoInicio.toISOString(),
+        fim: novoFim.toISOString(),
+      })
+      .eq('id', modalReagendar.id)
+
+    setReagendando(false)
+    setModalReagendar(null)
     carregarAgendamentos()
   }
 
@@ -408,6 +439,12 @@ export default function AgendaPage() {
                       >
                         🎫 Imprimir ticket
                       </button>
+                      <button
+                        onClick={() => abrirReagendar(a)}
+                        className="text-[11px] text-blue-600 hover:underline mt-1 block w-full text-center"
+                      >
+                        🔄 Reagendar
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -475,6 +512,55 @@ export default function AgendaPage() {
               >
                 Imprimir ticket
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalReagendar && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Reagendar atendimento</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {modalReagendar.pets?.nome} — {modalReagendar.customers?.nome}
+            </p>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Nova data</label>
+                <input
+                  type="date"
+                  value={novaData}
+                  onChange={e => setNovaData(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Novo horario</label>
+                <input
+                  type="time"
+                  value={novoHorario}
+                  onChange={e => setNovoHorario(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => setModalReagendar(null)}
+                  className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarReagendamento}
+                  disabled={reagendando}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {reagendando ? 'Salvando...' : 'Confirmar reagendamento'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
