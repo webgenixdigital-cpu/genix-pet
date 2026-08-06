@@ -14,6 +14,7 @@ type Agendamento = {
   endereco_entrega: string | null
   customer_id: string
   service_id: string
+  pet_id: string
   customers: { nome: string; telefone: string } | null
   pets: { nome: string } | null
   professionals: { nome: string; cor_agenda: string } | null
@@ -53,6 +54,7 @@ export default function AgendaPage() {
   const [novaData, setNovaData] = useState('')
   const [novoHorario, setNovoHorario] = useState('')
   const [reagendando, setReagendando] = useState(false)
+  const [pacotesPorPet, setPacotesPorPet] = useState<Record<string, { usadas: number; total: number }>>({})
   const supabase = createClient()
 
   function calcularIntervalo() {
@@ -100,7 +102,7 @@ export default function AgendaPage() {
     const { data } = await supabase
       .from('appointments')
       .select(`
-        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id,
+        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id,
         customers ( nome, telefone ),
         pets ( nome ),
         professionals ( nome, cor_agenda ),
@@ -114,6 +116,25 @@ export default function AgendaPage() {
       .order('inicio')
 
     setAgendamentos((data as any) || [])
+
+    const petIds = Array.from(new Set(((data as any) || []).map((a: any) => a.pet_id).filter(Boolean)))
+
+    if (petIds.length > 0) {
+      const { data: pacotes } = await supabase
+        .from('customer_packages')
+        .select('pet_id, sessoes_total, sessoes_usadas')
+        .in('pet_id', petIds)
+        .eq('status', 'ativo')
+
+      const mapa: Record<string, { usadas: number; total: number }> = {}
+      ;(pacotes || []).forEach((p: any) => {
+        mapa[p.pet_id] = { usadas: p.sessoes_usadas, total: p.sessoes_total }
+      })
+      setPacotesPorPet(mapa)
+    } else {
+      setPacotesPorPet({})
+    }
+
     setCarregando(false)
   }
 
@@ -379,7 +400,14 @@ export default function AgendaPage() {
                         </div>
                       </div>
 
-                      <p className="text-sm font-medium text-gray-900">{a.pets?.nome}</p>
+                      <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                        {a.pets?.nome}
+                        {pacotesPorPet[a.pet_id] && (
+                          <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
+                            🎁 {pacotesPorPet[a.pet_id].usadas + 1}/{pacotesPorPet[a.pet_id].total}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-gray-400 mt-0.5">{a.services?.nome}</p>
                       <p className="text-xs text-gray-400">{a.customers?.nome}</p>
 
