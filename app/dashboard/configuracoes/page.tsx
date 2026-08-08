@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -14,7 +14,7 @@ const PLANOS = [
   
 ]
 
-export default function ConfiguracoesPage() {
+function ConfiguracoesConteudo() {
   const searchParams = useSearchParams()
   const bloqueado = searchParams.get('bloqueado') === '1'
   const bloqueadoPorPlano = searchParams.get('bloqueado') === 'plano'
@@ -461,5 +461,13 @@ export default function ConfiguracoesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ConfiguracoesPage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-gray-400">Carregando...</div>}>
+      <ConfiguracoesConteudo />
+    </Suspense>
   )
 }
