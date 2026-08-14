@@ -1,0 +1,243 @@
+# Handoff — Unificação do Cadastro de Serviços (Catálogo Digital → base única)
+
+Contexto consolidado de tudo já decidido e implementado. Cole este documento
+como contexto inicial ao continuar o trabalho diretamente no projeto.
+
+---
+
+## 1. Objetivo geral
+
+Eliminar o cadastro de serviços duplicado do Genix Pet. Hoje existem dois
+lugares: o cadastro "interno" antigo (`services` / `service_pricing`,
+usado por `app/agendar/[slug]` e `app/dashboard/agenda/novo`) e o Catálogo
+Digital (`catalogo_*`, usado por `app/catalogo/[slug]` e
+`app/dashboard/catalogo`). A estrutura do Catálogo Digital passa a ser **a
+única fonte de serviços do sistema**, para todos os tenants/planos.
+
+**O que muda por plano NÃO é o processo de cadastro** (é sempre o mesmo,
+completo, com raça ou porte+pelagem, banho e tosa, adicionais, combos,
+fotos) — muda apenas:
+- **Starter**: cadastro completo, mas sem poder ativar a URL pública do
+  catálogo (`catalogo_ativo` travado em `false`, plan-gating igual ao
+  resto do projeto: sidebar + `middleware.ts`)
+- **Premium**: cadastro completo + pode ativar a URL pública
+- **Pro**: cadastro completo + URL pública + já vem com o cadastro
+  **pré-preenchido** (48 raças + preços sugestivos premium + fluxo SRD),
+  copiado automaticamente na assinatura/upgrade via função SQL
+
+A tela antiga (`app/dashboard/servicos/page.tsx`) será **apagada
+integralmente** ao final do processo — sem manter em paralelo, sem
+redirect. As tabelas `services`/`service_pricing` também serão removidas,
+só depois de tudo validado.
+
+---
+
+## 2. Estado do banco de dados (já aplicado em produção)
+
+### Tabelas do Catálogo Digital (já existentes e em uso)
+```
+tenants.catalogo_slug, tenants.catalogo_ativo   -- controla a URL pública
+catalogo_config          -- empresa: nome, slogan, logo_url, capa_url, whatsapp, mensagem_whatsapp
+catalogo_racas           -- raças cadastradas por tenant (id, nome, imagem_url)
+catalogo_raca_itens      -- serviços de cada raça (grupo, nome, descricao, preco, tosa_tipo, inclui, destaque, imagem_url, duracao_min)
+catalogo_porte_itens     -- itens do fluxo SRD/porte (mesmos campos + pelagens[])
+catalogo_porte_precos    -- preço de cada catalogo_porte_itens por porte (6 faixas)
+catalogo_tosa_tipos      -- tipos de tosa CUSTOMIZÁVEIS por tenant (id, nome, descricao) — substituiu um enum fixo
+```
+
+`grupo` em `catalogo_raca_itens`/`catalogo_porte_itens` é sempre um de:
+`'principal'` (Banho e Tosa) / `'adicional'` / `'combo'`.
+
+`tosa_tipo` (nas duas tabelas de itens) é um **texto livre** que referencia
+`catalogo_tosa_tipos.id` (uuid como texto) — NÃO é mais um enum fixo. Cada
+tenant cadastra/edita/remove seus próprios tipos de tosa (nome + descrição
+livre) na aba "Tipos de Tosa" do dashboard. O texto de `descricao` é o que
+aparece no modal explicativo do catálogo público quando o cliente
+seleciona um item com aquele `tosa_tipo`.
+
+Faixas de porte (6, não 4): `mini`, `pequeno`, `medio`, `grande`,
+`extra_grande`, `gigante`.
+
+**Regra de negócio importante — grupo "Banho e Tosa" (principal) do fluxo
+SRD/porte é sempre dividido por pelagem**: cada pacote (Banho, Banho +
+Higiênica, Banho + Tosa Básica, Banho + Tosa Estilo, Banho + Tosa Tesoura
+Bebê) existe em duas versões — "— Pelagem Curta" e "— Pelagem Longa" —
+usando o campo `pelagens: text[]` para restringir. **Isso só se aplica ao
+fluxo por porte (SRD)**; os itens de **raça não são divididos por
+pelagem** (a raça já implica a pelagem, não faz sentido perguntar de
+novo).
+
+**Duração do serviço**: `catalogo_porte_itens.duracao_min` e
+`catalogo_raca_itens.duracao_min` (int, default 20). Regra automática, sem
+tela de edição: qualquer item com "tosa" no nome (case-insensitive) = 40
+min, os demais = 20 min. Ajustes pontuais de duração fora dessa regra são
+tratados por mensagem direta entre o pet shop e o cliente final no momento
+da aprovação do agendamento — não pela tela de cadastro.
+
+### RLS (Storage e tabelas)
+Todas as tabelas `catalogo_*` têm RLS: leitura pública para tenants com
+`catalogo_ativo = true`, escrita restrita ao próprio tenant via
+`tenant_id = (select id from tenants where email = auth.email())`.
+
+**⚠️ Bug conhecido e já resolvido, documentado para não se repetir**: um
+INSERT autenticado em `storage.objects` pode falhar com o erro genérico
+`"new row violates row-level security policy"` mesmo com a policy de
+INSERT correta (ou até com `with check (true)`), **se não existir uma
+policy de SELECT no mesmo bucket** — o serviço de Storage do Supabase faz
+um `RETURNING` após o INSERT, que também precisa passar por RLS de
+leitura. Sempre parear policy de INSERT com policy de SELECT
+correspondente em qualquer bucket novo, mesmo que o bucket já esteja
+marcado como "Public" nas configurações (isso não substitui a RLS de
+SELECT em `storage.objects` para chamadas autenticadas).
+
+### Template do plano Pro
+Tabelas centrais (não pertencem a nenhum tenant, RLS habilitada sem
+nenhuma policy — só acessíveis via SQL direto/função):
+```
+catalogo_template_porte_itens
+catalogo_template_porte_precos
+catalogo_template_racas       -- 48 raças, cada uma com porte_padrao e pelagem_padrao
+```
+
+Função `aplicar_template_pro(tenant_id uuid)`: copia o template inteiro
+para dentro das tabelas `catalogo_*` de um tenant específico. Chamar **uma
+vez** quando o tenant assina ou faz upgrade para o plano Pro (ainda não
+está automatizado no fluxo de assinatura — hoje é uma chamada SQL manual;
+ver seção "Próximos passos possíveis" abaixo). Cria automaticamente os 4
+tipos de tosa padrão do tenant (Higiênica/Rotina/Estilo/Tesoura) e já
+preenche `duracao_min` corretamente. Não é idempotente de propósito — não
+rodar duas vezes para o mesmo tenant.
+
+### Migração do cadastro legado (services/service_pricing)
+Função `migrar_servicos_legado(tenant_id uuid)`: lê `services` +
+`service_pricing` de um tenant e cria os itens correspondentes em
+`catalogo_porte_itens`/`catalogo_porte_precos` (sempre grupo
+`'principal'`, já que o sistema antigo não distingue categorias). Lógica:
+- Preço base por porte vem de `services` (`preco` flat, ou os 4 campos
+  `preco_pequeno/medio/grande/gigante` — mapeados: `mini` e `pequeno`
+  puxam de `preco_pequeno`; `extra_grande` e `gigante` puxam de
+  `preco_gigante`)
+- Overrides granulares de `service_pricing` (que já usa a nomenclatura
+  nova de porte/pelagem, sem necessidade de conversão) sobrescrevem a base
+  para aquele porte+pelagem específico
+- Se o preço final for igual entre pelagem curta e longa em todas as
+  faixas → migra como **1 item**, sem restrição de pelagem
+- Se houver qualquer diferença → migra como **2 itens** separados ("Nome
+  — Pelagem Curta" / "Nome — Pelagem Longa"), cada um com sua própria
+  faixa de preços
+- Duração aplicada pela mesma regra automática (tosa no nome = 40min)
+
+Testada e validada com dados reais de exemplo (2 serviços, 1 com override
+de pelagem que gerou split correto, 1 sem override que ficou como item
+único) — resultado bateu 100% com o esperado manualmente calculado.
+
+**Nenhum tenant de produção com dados reais em `services`/`service_pricing`
+foi encontrado no ambiente ainda** (só o tenant de teste tinha 2 serviços,
+de testes anteriores) — a função está pronta e validada logicamente, mas
+ainda não foi rodada "para valer" contra um cliente real com histórico.
+
+**Lacuna resolvida, mas vale reconfirmar**: a função assume que
+`service_pricing.porte` e `service_pricing.pelagem` já usam exatamente os
+mesmos valores de texto do catálogo novo (`mini`/`pequeno`/.../`curta`/
+`longa`) — confirmado com uma amostra real, mas se algum tenant tiver
+grafias diferentes (`"P"`, `"Pequeno"` com maiúscula, etc.) a migração
+não vai casar esses valores e vai tratar como se não houvesse override.
+Vale rodar uma checagem de `distinct porte, pelagem` antes de migrar
+tenants de produção reais.
+
+---
+
+## 3. Estado do front-end (já aplicado)
+
+### `app/catalogo/[slug]/page.tsx` (Server Component)
+Busca tenant por `catalogo_slug`, valida `catalogo_ativo`, carrega
+`catalogo_config` + raças + itens + tipos de tosa, tudo via client
+Supabase com `cache: "no-store"` forçado no fetch (Next.js 14 cacheia
+fetch dentro de Server Components por padrão mesmo com
+`export const revalidate = 0` na página — isso já causou bug de dado
+desatualizado uma vez, resolvido adicionando essa opção no client).
+
+### `app/catalogo/[slug]/catalogo-client.tsx` (Client Component)
+Toda a interação do catálogo público: escolha raça x SRD, cards de raça,
+formulário porte+pelagem, listagem de serviços com checkbox, **bloqueio
+mútuo entre grupo "principal" e grupo "combo"** (ao marcar um item de
+Banho e Tosa, os Combos ficam desabilitados até desmarcar, e vice-versa —
+adicionais ficam sempre livres), modal explicativo de tosa (busca em
+`dados.observacoesTosa`, que vem de `catalogo_tosa_tipos` do tenant),
+resumo com total, envio para WhatsApp com mensagem template
+(`{itens}`/`{total}`/`{origem}`). Header com capa (aspect-ratio 3:1, sem
+corte) + logo circular sobreposta + nome, alinhados à esquerda.
+
+### `app/dashboard/catalogo/page.tsx` (dashboard autenticado)
+Tela de edição completa: abas Empresa / Raças / Tipos de Tosa / Banho e
+Tosa / Adicionais / Combos. Busca busca campo de busca (com `<datalist>`)
+na aba Raças, ordenação alfabética. Cards de raça e de item **minimizados
+por padrão** (só mostra nome + preço no cabeçalho clicável; expande ao
+clicar). Upload de imagem real via Supabase Storage (bucket
+`catalogo-imagens`, path `{tenant_id}/...`) — capa, logo, foto de raça,
+foto de item, todos com dica de tamanho recomendado (capa 1200x400px,
+demais 300x300 ou 200x200 quadradas). CRUD de tipos de tosa. Toggle liga/
+desliga `catalogo_ativo` + campo de slug. Todos os botões de salvar
+mostram alerta de sucesso/erro.
+
+---
+
+## 4. PRÓXIMO PASSO — Passo 3 da spec: trocar fonte de dados dos bookings
+
+Este é o trabalho a fazer agora, direto no projeto.
+
+### 4.1 Booking público — `app/agendar/[slug]/page.tsx`
+Hoje busca serviços em `services`/`service_pricing`. Precisa passar a
+buscar em `catalogo_racas`/`catalogo_raca_itens` (se o tenant tiver fluxo
+por raça) e/ou `catalogo_porte_itens`/`catalogo_porte_precos` (fluxo SRD),
+igual já faz `app/catalogo/[slug]/page.tsx`.
+
+**Decisão em aberto a confirmar antes de codar**: o booking interno de
+agendamento (`agendar/[slug]`) precisa replicar a mesma experiência de
+seleção do catálogo público (raça vs SRD, bloqueio banho×combo, modal de
+tosa), ou é uma versão mais simplificada, só listando os itens do grupo
+"principal" direto (já que o objetivo ali é agendar, não "montar um
+carrinho" pra mandar WhatsApp)? Recomendo reaproveitar o máximo possível
+de `catalogo-client.tsx` como base (extrair a lógica de seleção pra um
+hook/componente compartilhado), mas a decisão final de UX é de negócio.
+
+### 4.2 Booking interno — `app/dashboard/agenda/novo/page.tsx`
+Mesma troca de fonte. Hoje é (segundo o que foi relatado nesta
+conversa) um fluxo mais simples, só nome do pet + serviço, sem os
+filtros de porte/pelagem/raça. **Decisão em aberto**: mantém simplificado
+(só lista os itens do grupo "principal", direto, sem o wizard completo) ou
+ganha os mesmos filtros do público? Ainda não decidido — só sinalizado
+como pergunta na spec original.
+
+### 4.3 Duração e bloqueio de horário na agenda
+Agora que `duracao_min` existe nas tabelas do catálogo, ao trocar a fonte
+de dados da agenda, usar esse campo para calcular o bloqueio de horário
+(substituindo `services.duracao_min`/`service_pricing.duracao_min`).
+
+### 4.4 Cuidado ao migrar — não quebrar produção
+Antes de apagar qualquer coisa do sistema antigo: confirmar que os dois
+bookings (público e interno) estão 100% funcionais lendo da base nova,
+testados com um tenant real, incluindo o caso de tenant que só tem fluxo
+raça, só tem fluxo SRD, ou tem os dois.
+
+---
+
+## 5. Passos seguintes da spec (depois do passo 3)
+
+- **Passo 4**: Plan-gating do toggle `catalogo_ativo` — Starter bloqueado
+  (sidebar com 🔒 + `middleware.ts`), Premium e Pro liberados. Padrão
+  igual ao resto do projeto (já documentado internamente).
+- **Passo 5**: Apagar `app/dashboard/servicos/page.tsx` e as tabelas
+  `services`/`service_pricing` — só depois de tudo validado em produção,
+  sem tenant nenhum ainda dependendo delas.
+
+## 6. Decisões de negócio ainda em aberto (não travar o código nelas sem confirmar)
+- Quem cura/atualiza o conteúdo do template de raças/preços do plano Pro,
+  e com que frequência?
+- Tenant que faz **downgrade** de Pro para Starter/Premium: mantém o
+  cadastro que foi pré-preenchido (só perde a URL pública), ou o conteúdo
+  pré-preenchido é removido também?
+- O booking interno precisa dos mesmos filtros de raça/porte/pelagem do
+  catálogo público, ou fica simplificado?
+- Automatizar a chamada de `aplicar_template_pro()` no fluxo de
+  assinatura/upgrade (hoje é manual via SQL Editor).

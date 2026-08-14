@@ -41,6 +41,7 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
   // -------------------- navegação --------------------
   function irPara(p: Passo) {
     setPasso(p);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function selecionarRaca(raca: Raca) {
@@ -191,34 +192,16 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
-      <header className="relative">
-        <div
-          className="w-full aspect-[3/1] max-h-[400px] bg-gradient-to-br from-blue-600 to-blue-800 bg-cover bg-center"
-          style={dados.empresa.capaUrl ? { backgroundImage: `url(${dados.empresa.capaUrl})` } : undefined}
-        >
-          {/* gradiente escuro na base da capa, só para dar contraste ao texto/logo */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-
-          <div className="absolute bottom-0 left-0 right-0 flex items-center gap-3 px-5 pb-4">
-            {dados.empresa.logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={dados.empresa.logoUrl}
-                alt="Logo"
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-white shadow-md bg-white shrink-0"
-              />
-            )}
-            <div>
-              <h1 className="text-lg sm:text-2xl font-bold text-white drop-shadow-sm">{dados.empresa.nome}</h1>
-              {dados.empresa.slogan && (
-                <p className="text-white/90 text-xs sm:text-sm drop-shadow-sm">{dados.empresa.slogan}</p>
-              )}
-            </div>
-          </div>
-        </div>
+      <header className="bg-gradient-to-br from-blue-600 to-blue-800 text-white px-5 pt-7 pb-16 text-center">
+        {dados.empresa.logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={dados.empresa.logoUrl} alt="Logo" className="max-h-16 mx-auto mb-3" />
+        )}
+        <h1 className="text-2xl font-bold">{dados.empresa.nome}</h1>
+        {dados.empresa.slogan && <p className="opacity-90 mt-1 text-sm">{dados.empresa.slogan}</p>}
       </header>
 
-      <nav className="max-w-3xl mx-auto px-4 mt-4 mb-4 flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
+      <nav className="max-w-3xl mx-auto px-4 mt-3 flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
         {crumbs.map((c, i) => (
           <span key={c.passo + i}>
             <button className="text-blue-600 font-semibold hover:underline" onClick={() => irPara(c.passo)}>
@@ -229,7 +212,7 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
         ))}
       </nav>
 
-      <div className="max-w-3xl mx-auto px-4">
+      <div className="max-w-3xl mx-auto px-4 -mt-9">
         <div className="bg-white rounded-2xl shadow-md p-6">
           {passo === "inicio" && (
             <StepInicio onEscolher={(op) => irPara(op === "raca" ? "racas" : "porte")} />
@@ -464,7 +447,6 @@ function ItemLista({
   inclui,
   destaque,
   preco,
-  imagemUrl,
   checked,
   disabled,
   onToggle,
@@ -474,7 +456,6 @@ function ItemLista({
   inclui?: string[] | null;
   destaque?: boolean;
   preco: number;
-  imagemUrl?: string | null;
   checked: boolean;
   disabled: boolean;
   onToggle: () => void;
@@ -493,10 +474,6 @@ function ItemLista({
           disabled={disabled}
           onChange={onToggle}
         />
-        {imagemUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imagemUrl} alt={nome} className="w-10 h-10 rounded-full object-cover shrink-0 bg-slate-100" />
-        )}
         <div>
           <div className="font-semibold text-sm">
             {nome}{" "}
@@ -591,7 +568,6 @@ function StepServicosRaca({
                   inclui={item.inclui}
                   destaque={item.destaque}
                   preco={item.preco}
-                  imagemUrl={item.imagem_url}
                   checked={itensSelecionados.has(item.id)}
                   disabled={
                     (g.chave === "principal" && bloqueio.principal && !itensSelecionados.has(item.id)) ||
@@ -665,7 +641,6 @@ function StepServicosPorte({
                   inclui={item.inclui}
                   destaque={item.destaque}
                   preco={item.precoPorPorte[porte.id] ?? 0}
-                  imagemUrl={item.imagem_url}
                   checked={itensSelecionados.has(item.id)}
                   disabled={
                     (g.chave === "principal" && bloqueio.principal && !itensSelecionados.has(item.id)) ||
@@ -691,8 +666,8 @@ function StepServicosPorte({
 
 function BackButton({ onClick }: { onClick: () => void }) {
   return (
-    <button className="flex items-center gap-1 text-slate-500 font-medium text-sm mb-5 hover:text-blue-600 transition" onClick={onClick}>
-      <span aria-hidden>←</span> Voltar
+    <button className="text-blue-600 font-semibold text-sm mb-4 hover:underline" onClick={onClick}>
+      ← Voltar
     </button>
   );
 }
