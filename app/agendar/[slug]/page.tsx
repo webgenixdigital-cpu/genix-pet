@@ -175,6 +175,7 @@ export default function AgendarPage() {
   const [itensRacaSelecionados, setItensRacaSelecionados] = useState<Set<string>>(new Set())
   const [itensPorteSelecionados, setItensPorteSelecionados] = useState<Set<string>>(new Set())
   const [modalTosa, setModalTosa] = useState<{ titulo: string; texto: string } | null>(null)
+  const [buscaRaca, setBuscaRaca] = useState('')
   useEffect(() => {
     async function carregar() {
       const { data: tenantData } = await supabase
@@ -1052,23 +1053,36 @@ export default function AgendarPage() {
                   ← Trocar opcao
                 </button>
                 <h2 className="text-sm font-medium text-gray-900 mb-4">Qual a raca do seu pet?</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {racas.map(r => (
-                    <button
-                      key={r.id}
-                      onClick={() => selecionarRacaCatalogo(r)}
-                      className="bg-white border border-gray-100 rounded-xl p-3 flex flex-col items-center gap-2 hover:border-blue-300 transition-colors"
-                    >
-                      {r.imagem_url ? (
-                        <img src={r.imagem_url} alt={r.nome} className="w-12 h-12 rounded-full object-cover" />
-                      ) : (
-                        <div className="text-2xl">🐶</div>
-                      )}
-                      <p className="text-xs font-medium text-gray-900 text-center">{r.nome}</p>
-                    </button>
-                  ))}
-                  {racas.length === 0 && (
-                    <p className="text-sm text-gray-400 col-span-2 text-center py-8">Nenhuma raca cadastrada.</p>
+
+                <input
+                  type="text"
+                  value={buscaRaca}
+                  onChange={e => setBuscaRaca(e.target.value)}
+                  placeholder="Digite as iniciais da raca..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+
+                <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+                  {racas
+                    .filter(r => r.nome.toLowerCase().includes(buscaRaca.toLowerCase()))
+                    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                    .map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => { selecionarRacaCatalogo(r); setBuscaRaca('') }}
+                        className="bg-white border border-gray-100 rounded-lg px-3 py-2.5 flex items-center gap-3 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
+                      >
+                        {r.imagem_url ? (
+                          <img src={r.imagem_url} alt={r.nome} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <span className="text-lg flex-shrink-0">🐶</span>
+                        )}
+                        <p className="text-sm font-medium text-gray-900">{r.nome}</p>
+                      </button>
+                    ))}
+                  {racas.filter(r => r.nome.toLowerCase().includes(buscaRaca.toLowerCase())).length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-8">Nenhuma raca encontrada.</p>
                   )}
                 </div>
               </div>
