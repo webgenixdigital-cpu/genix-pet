@@ -164,6 +164,11 @@ export default function AgendarPage() {
   const [frequenciaMensal, setFrequenciaMensal] = useState(1)
   const [mesmoEndereco, setMesmoEndereco] = useState(true)
   const [cepColeta, setCepColeta] = useState('')
+  const [ruaColeta, setRuaColeta] = useState('')
+  const [numeroColeta, setNumeroColeta] = useState('')
+  const [bairroColeta, setBairroColeta] = useState('')
+  const [cidadeColeta, setCidadeColeta] = useState('')
+  const [ufColeta, setUfColeta] = useState('')
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [transporteIdaVolta, setTransporteIdaVolta] = useState(false)
   const [distanciaKm, setDistanciaKm] = useState<number | null>(null)
@@ -176,6 +181,7 @@ export default function AgendarPage() {
   const [itensPorteSelecionados, setItensPorteSelecionados] = useState<Set<string>>(new Set())
   const [modalTosa, setModalTosa] = useState<{ titulo: string; texto: string } | null>(null)
   const [buscaRaca, setBuscaRaca] = useState('')
+  const [faixasTransporte, setFaixasTransporte] = useState<{ raio_min_km: number; raio_max_km: number; valor_fixo: number }[]>([])
   useEffect(() => {
     async function carregar() {
       const { data: tenantData } = await supabase
@@ -247,10 +253,21 @@ export default function AgendarPage() {
         .eq('ativo', true)
         .order('nome')
 
+      const { data: faixasData } = await supabase
+        .from('transport_price_tiers')
+        .select('raio_min_km, raio_max_km, valor_fixo')
+        .eq('tenant_id', tenantData.id)
+        .order('raio_min_km')
+
       setRacas(racasMontadas)
       setPorteItens(porteItensMontados)
       setTiposTosa(tiposTosaData || [])
       setProfissionais(profissionaisData || [])
+      setFaixasTransporte((faixasData || []).map((f: any) => ({
+        raio_min_km: Number(f.raio_min_km),
+        raio_max_km: Number(f.raio_max_km),
+        valor_fixo: Number(f.valor_fixo),
+      })))
       setCarregando(false)
     }
 
@@ -266,12 +283,16 @@ export default function AgendarPage() {
       const data = await res.json()
 
       if (!data.erro) {
+        setRuaColeta(data.logradouro || '')
+        setBairroColeta(data.bairro || '')
+        setCidadeColeta(data.localidade || '')
+        setUfColeta(data.uf || '')
+
         const enderecoCompleto = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`
         setEnderecoColeta(enderecoCompleto)
         if (mesmoEndereco) {
           setEnderecoEntrega(enderecoCompleto)
         }
-        await calcularValorTransporte(enderecoCompleto)
       }
     } catch {
       // silencioso
@@ -279,12 +300,24 @@ export default function AgendarPage() {
     setBuscandoCep(false)
   }
 
-  async function calcularValorTransporte(endereco: string) {
-    if (!tenant || !(tenant as any).endereco_lat || !(tenant as any).preco_por_km) return
+  async function calcularValorTransporteEstruturado() {
+    if (!numeroColeta || !ruaColeta || !cidadeColeta || !ufColeta) return
+    await calcularValorTransporte('', undefined, ruaColeta, numeroColeta, cidadeColeta, ufColeta)
+  }
+
+  async function calcularValorTransporte(endereco: string, cep?: string, rua?: string, numero?: string, cidade?: string, uf?: string) {
+    if (!tenant || !(tenant as any).endereco_lat) return
 
     setCalculandoDistancia(true)
     try {
-      const res = await fetch(`/api/geocodificar?endereco=${encodeURIComponent(endereco)}`)
+      const params = new URLSearchParams()
+      if (endereco) params.set('endereco', endereco)
+      if (rua) params.set('rua', rua)
+      if (numero) params.set('numero', numero)
+      if (cidade) params.set('cidade', cidade)
+      if (uf) params.set('uf', uf)
+
+      const res = await fetch(`/api/geocodificar?${params.toString()}`)
       const coords = await res.json()
 
       if (coords.lat) {
@@ -506,7 +539,17 @@ export default function AgendarPage() {
   }
 
   function calcularValorTransporteFinal(): number {
-    if (!precisaTransporte || distanciaKm === null || !tenant?.preco_por_km) return 0
+    if (!precisaTransporte || distanciaKm === null) return 0
+
+    const faixaCorrespondente = faixasTransporte.find(
+      f => distanciaKm >= f.raio_min_km && distanciaKm <= f.raio_max_km
+    )
+
+    if (faixaCorrespondente) {
+      return faixaCorrespondente.valor_fixo * (transporteIdaVolta ? 2 : 1)
+    }
+
+    if (!tenant?.preco_por_km) return 0
     const valorPorTrecho = Math.max(distanciaKm * Number(tenant.preco_por_km), Number(tenant.valor_minimo_transporte || 0))
     return valorPorTrecho * (transporteIdaVolta ? 2 : 1)
   }
@@ -522,6 +565,11 @@ export default function AgendarPage() {
 
     if (!tenant || resumoFinal.selecionados.length === 0 || !primeiroItemPrincipal) {
       setErroAgendamento('Selecione ao menos um servico.')
+      return
+    }
+
+    if (precisaTransporte && (!ruaColeta || !numeroColeta || !cidadeColeta || !ufColeta)) {
+      setErroAgendamento('Preencha rua, numero, cidade e UF do endereco de coleta.')
       return
     }
 
@@ -624,6 +672,9 @@ export default function AgendarPage() {
     const nomesServicos = resumoFinal.selecionados.map(i => i.nome).join(' + ')
     const duracaoMs = (resumoFinal.duracao || 60) * 60000
     const valorTransporte = calcularValorTransporteFinal()
+    const enderecoColetaFinal = precisaTransporte
+      ? `${ruaColeta}, ${numeroColeta}${bairroColeta ? ', ' + bairroColeta : ''}, ${cidadeColeta} - ${ufColeta}`
+      : ''
     const agendamentosCriadosIds: string[] = []
     let erroCriacao = ''
 
@@ -646,8 +697,8 @@ export default function AgendarPage() {
           preco_cobrado: resumoFinal.total,
           observacoes: nomesServicos,
           precisa_transporte: precisaTransporte,
-          endereco_coleta: precisaTransporte ? enderecoColeta : null,
-          endereco_entrega: precisaTransporte ? enderecoEntrega : null,
+          endereco_coleta: precisaTransporte ? enderecoColetaFinal : null,
+          endereco_entrega: precisaTransporte ? enderecoColetaFinal : null,
           is_recorrente: ehRecorrente,
           frequencia_mensal: ehRecorrente ? frequenciaMensal : null,
           distancia_km: precisaTransporte ? distanciaKm : null,
@@ -1348,44 +1399,63 @@ export default function AgendarPage() {
                         </div>
 
                         <div>
-                          <label className="text-sm text-gray-600 mb-1 block">Endereco de coleta</label>
+                          <label className="text-sm text-gray-600 mb-1 block">Rua *</label>
                           <input
                             type="text"
-                            value={enderecoColeta}
-                            onChange={e => {
-                              setEnderecoColeta(e.target.value)
-                              if (mesmoEndereco) setEnderecoEntrega(e.target.value)
-                            }}
-                            placeholder="Rua, numero, bairro"
+                            value={ruaColeta}
+                            onChange={e => setRuaColeta(e.target.value)}
+                            placeholder="Rua das Flores"
                             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
 
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={mesmoEndereco}
-                            onChange={e => {
-                              setMesmoEndereco(e.target.checked)
-                              if (e.target.checked) setEnderecoEntrega(enderecoColeta)
-                            }}
-                            className="w-4 h-4"
-                          />
-                          <span className="text-xs text-gray-600">Entregar no mesmo endereco</span>
-                        </label>
-
-                        {!mesmoEndereco && (
-                          <div>
-                            <label className="text-sm text-gray-600 mb-1 block">Endereco de entrega</label>
+                        <div className="flex gap-3">
+                          <div className="w-24">
+                            <label className="text-sm text-gray-600 mb-1 block">Numero *</label>
                             <input
                               type="text"
-                              value={enderecoEntrega}
-                              onChange={e => setEnderecoEntrega(e.target.value)}
-                              placeholder="Rua, numero, bairro"
+                              value={numeroColeta}
+                              onChange={e => setNumeroColeta(e.target.value)}
+                              onBlur={calcularValorTransporteEstruturado}
+                              placeholder="123"
                               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
-                        )}
+                          <div className="flex-1">
+                            <label className="text-sm text-gray-600 mb-1 block">Bairro</label>
+                            <input
+                              type="text"
+                              value={bairroColeta}
+                              onChange={e => setBairroColeta(e.target.value)}
+                              placeholder="Centro"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                          <div className="flex-1">
+                            <label className="text-sm text-gray-600 mb-1 block">Cidade *</label>
+                            <input
+                              type="text"
+                              value={cidadeColeta}
+                              onChange={e => setCidadeColeta(e.target.value)}
+                              placeholder="Pocos de Caldas"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="w-20">
+                            <label className="text-sm text-gray-600 mb-1 block">UF *</label>
+                            <input
+                              type="text"
+                              value={ufColeta}
+                              onChange={e => setUfColeta(e.target.value.toUpperCase())}
+                              placeholder="MG"
+                              maxLength={2}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
 
                         {tenant?.preco_por_km && (
                           <label className="flex items-center gap-2 cursor-pointer">
@@ -1403,7 +1473,7 @@ export default function AgendarPage() {
                           <p className="text-xs text-gray-400">Calculando distancia...</p>
                         )}
 
-                        {distanciaKm !== null && tenant?.preco_por_km && (
+                        {distanciaKm !== null && (
                           <div className="bg-blue-50 rounded-lg p-2.5">
                             <p className="text-xs text-blue-700">
                               Distancia: {distanciaKm.toFixed(1)} km {transporteIdaVolta ? '(ida e volta)' : '(somente ida)'}

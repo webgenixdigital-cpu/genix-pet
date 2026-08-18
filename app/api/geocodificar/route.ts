@@ -12,14 +12,51 @@ async function buscarCoordenadas(endereco: string) {
   return null
 }
 
+async function buscarEstruturado(rua: string, numero: string, cidade: string, uf: string) {
+  const params = new URLSearchParams({
+    street: `${numero} ${rua}`.trim(),
+    city: cidade,
+    state: uf,
+    country: 'Brazil',
+    format: 'json',
+    limit: '1',
+  })
+
+  const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'GenixPet/1.0 (contato@genixpet.com.br)' },
+  })
+  const data = await res.json()
+  if (data && data.length > 0) {
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+  }
+  return null
+}
+
 export async function GET(request: NextRequest) {
   const endereco = request.nextUrl.searchParams.get('endereco')
+  const rua = request.nextUrl.searchParams.get('rua')
+  const numero = request.nextUrl.searchParams.get('numero') || ''
+  const cidade = request.nextUrl.searchParams.get('cidade')
+  const uf = request.nextUrl.searchParams.get('uf')
 
-  if (!endereco) {
+  if (!endereco && !rua) {
     return NextResponse.json({ error: 'Endereco nao informado' }, { status: 400 })
   }
 
   try {
+    if (rua && cidade && uf) {
+      const resultadoEstruturado = await buscarEstruturado(rua, numero, cidade, uf)
+      if (resultadoEstruturado) {
+        return NextResponse.json(resultadoEstruturado)
+      }
+      await new Promise(r => setTimeout(r, 1000))
+    }
+
+    if (!endereco) {
+      return NextResponse.json({ error: 'Endereco nao encontrado' }, { status: 404 })
+    }
+
     const partes = endereco.split(',').map(p => p.trim())
 
     const tentativas = [
