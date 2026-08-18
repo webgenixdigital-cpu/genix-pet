@@ -12,7 +12,7 @@ const NIX_URL =
 const NIX_SOCIAL_URL =
   'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%208%20de%20ago.%20de%202026,%2010_18_53.png'
 
-const CTA_TEXTO = 'Teste Grátis por 14 Dias'
+const CTA_TEXTO = 'Teste Grátis por 7 Dias'
 const CTA_SUB = 'Sem cartão de crédito. Comece em poucos minutos.'
 
 const PLANOS = [
@@ -22,9 +22,8 @@ const PLANOS = [
     desc: 'Até 2 profissionais',
     destaque: false,
     itens: [
-      'Agendamento online público',
+            'Agendamento online público',
       'Clientes e pets ilimitados',
-      'Bloqueios de agenda e fila de encaixe',
       'Módulo financeiro e comissões',
       'Produtos e pacotes de serviço',
       'Agendamentos recorrentes',
@@ -50,6 +49,7 @@ const PLANOS = [
     destaque: false,
     itens: [
       'Tudo do Premium',
+      'Catálogo pré-preenchido com 48 raças',
       'WhatsApp automático',
       'Lembretes de agendamento automáticos',
       'Mensagens de pós-venda automáticas',
@@ -92,6 +92,7 @@ const RECURSOS = [
   { nome: 'Financeiro', icone: 'moeda', cor: 'green' },
   { nome: 'Clientes', icone: 'usuarios', cor: 'purple' },
   { nome: 'Pets', icone: 'pet', cor: 'amber' },
+  { nome: 'Catálogo Digital', icone: 'kanban', cor: 'blue' },
   { nome: 'Kanban', icone: 'kanban', cor: 'cyan' },
   { nome: 'Relatórios', icone: 'relatorio', cor: 'rose' },
   { nome: 'Mensagens', icone: 'mensagem', cor: 'blue' },
@@ -387,6 +388,89 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* CATÁLOGO DIGITAL */}
+      <section className="bg-white py-14 md:py-24 border-t border-gray-100">
+        <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-14 items-center">
+          <div className="text-center md:text-left">
+            <Eyebrow>Divulgação externa</Eyebrow>
+            <Titulo className="mb-4">Catálogo Digital com link próprio</Titulo>
+            <p className="text-gray-500 mb-6 leading-relaxed">
+              Cada pet shop ganha um link exclusivo para divulgar o catálogo de serviços. O
+              tutor escolhe a raça exata do pet — com busca em tempo real, em ordem alfabética —
+              ou, se o pet não tiver raça definida, informa porte e pelagem.
+            </p>
+            <ul className="flex flex-col gap-3 items-center md:items-start">
+              {[
+                { texto: 'Busca de raça em tempo real', icone: 'pet', cor: 'blue' },
+                { texto: '6 faixas de porte + pelagem curta/longa', icone: 'grafico', cor: 'amber' },
+                { texto: 'Serviços por grupo: Banho e Tosa, Adicionais e Combos', icone: 'kanban', cor: 'purple' },
+                { texto: 'Clientes recorrentes pulam direto para os serviços', icone: 'check', cor: 'green' },
+              ].map(i => (
+                <li key={i.texto} className="text-sm text-gray-600 flex items-center gap-3">
+                  <IconBadge cor={i.cor as CorBadge} tamanho="w-8 h-8">
+                    <span className="scale-[0.65]">{Icones[i.icone as keyof typeof Icones]()}</span>
+                  </IconBadge>
+                  {i.texto}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="relative">
+            <div className="pointer-events-none absolute -top-6 -left-6 w-24 h-24 rounded-full bg-emerald-50 hidden md:block" />
+            <div className="relative bg-gray-50 border border-gray-100 rounded-2xl p-6">
+              <p className="text-xs text-gray-400 mb-3">genixpet.com.br/seupetshop</p>
+              <div className="flex flex-col gap-2">
+                <div className="bg-white rounded-xl px-4 py-3 shadow-sm flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-800">Banho e Tosa — Golden Retriever</span>
+                  <span className="text-sm font-bold text-blue-600">R$ 80</span>
+                </div>
+                <div className="bg-white rounded-xl px-4 py-3 shadow-sm flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-800">Combo Banho + Hidratação</span>
+                  <span className="text-sm font-bold text-blue-600">R$ 110</span>
+                </div>
+                <div className="bg-white rounded-xl px-4 py-3 shadow-sm flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-800">Adicional — Corte de unhas</span>
+                  <span className="text-sm font-bold text-blue-600">R$ 20</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* TRANSPORTE INTELIGENTE */}
+      <section className="bg-gray-50 py-14 md:py-24">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <div className="flex justify-center mb-4">
+            <IconBadge cor="cyan" tamanho="w-14 h-14">
+              <span className="scale-125">{Icones.caixa()}</span>
+            </IconBadge>
+          </div>
+          <Eyebrow>Leva e traz</Eyebrow>
+          <Titulo className="mb-4">Transporte Inteligente</Titulo>
+          <p className="text-gray-500 max-w-xl mx-auto leading-relaxed mb-10">
+            Cálculo automático de distância por geolocalização, com faixas fixas de preço que
+            você mesmo configura — e que têm prioridade sobre o cálculo automático quando
+            definidas.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {[
+              { texto: 'Distância calculada automaticamente', icone: 'grafico', cor: 'blue' },
+              { texto: 'Valor mínimo para corridas curtas', icone: 'moeda', cor: 'amber' },
+              { texto: 'Ida e volta ou só ida', icone: 'relogio', cor: 'purple' },
+            ].map(i => (
+              <div
+                key={i.texto}
+                className="bg-white border border-gray-100 rounded-[20px] p-6 flex flex-col items-center gap-3 text-center shadow-[0_2px_16px_rgba(15,23,42,0.04)]"
+              >
+                <IconBadge cor={i.cor as CorBadge}>{Icones[i.icone as keyof typeof Icones]()}</IconBadge>
+                <p className="text-sm text-gray-700 font-medium">{i.texto}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* MENSAGENS INTELIGENTES */}
       <section className="py-14 md:py-24">
         <div className="max-w-6xl mx-auto px-6">
@@ -435,9 +519,8 @@ export default function LandingPage() {
             Comece com a experiência de quem já vive o mercado pet.
           </h2>
           <p className="text-blue-100/80 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Lembretes automáticos por WhatsApp, módulo financeiro completo, controle de
-            comissões, agendamentos recorrentes, pacotes de serviço e relatório fiscal — tudo
-            em um único plano.
+            Catálogo digital com link próprio para divulgação externa, relatório fiscal e
+            controle de estoque avançado — tudo em um único plano.
           </p>
 
           <Link
@@ -617,7 +700,7 @@ export default function LandingPage() {
           </div>
         </div>
         <p className="text-center text-xs text-gray-400 mt-6">
-          Genix Pet © — Uma empresa do grupo Genix Sistemas Integrativos
+          Genix Pet © — Uma empresa do grupo Web Genix Digital
         </p>
       </footer>
     </div>
