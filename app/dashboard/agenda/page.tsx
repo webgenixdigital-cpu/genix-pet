@@ -36,6 +36,9 @@ const PROXIMO_STATUS: Record<string, string> = {
   confirmado: 'em_atendimento',
   em_atendimento: 'concluido',
 }
+function fmtMoeda(v: number): string {
+  return `R$ ${v.toFixed(2).replace('.', ',')}`
+}
 
 function formatarDataISO(data: Date): string {
   const ano = data.getFullYear()
@@ -52,8 +55,16 @@ export default function AgendaPage() {
   const [offsetCalendario, setOffsetCalendario] = useState(0)
     const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
     const [infoAberto, setInfoAberto] = useState<Agendamento | null>(null)
-  const [notasInternas, setNotasInternas] = useState('')
+    const [notasInternas, setNotasInternas] = useState('')
   const [salvandoNotas, setSalvandoNotas] = useState(false)
+
+  const [modalServico, setModalServico] = useState<Agendamento | null>(null)
+  const [racasCatalogo, setRacasCatalogo] = useState<any[]>([])
+  const [porteItensCatalogo, setPorteItensCatalogo] = useState<any[]>([])
+  const [catalogoCarregado, setCatalogoCarregado] = useState(false)
+  const [itensParaEdicao, setItensParaEdicao] = useState<any[]>([])
+  const [itensSelecionadosEdicao, setItensSelecionadosEdicao] = useState<Set<string>>(new Set())
+  const [salvandoServico, setSalvandoServico] = useState(false)
   const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
   const [novaData, setNovaData] = useState('')
   const [novoHorario, setNovoHorario] = useState('')
@@ -250,6 +261,129 @@ function enviarLembreteRapido(a: Agendamento) {
     const link = `https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`
     window.open(link, '_blank')
   }
+    async function abrirEditarServico(agendamento: Agendamento) {
+    setModalServico(agendamento)
+    setItensSelecionadosEdicao(new Set())
+    setItensParaEdicao([])
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: tenant } = await supabase.from('tenants').select('id').eq('email', user.email).single()
+    if (!tenant) return
+
+    let racas = racasCatalogo
+    let porteItens = porteItensCatalogo
+
+    if (!catalogoCarregado) {
+      const { data: racasData } = await supabase
+        .from('catalogo_racas')
+        .select('id, nome')
+        .eq('tenant_id', tenant.id)
+
+      const racaIds = (racasData || []).map((r: any) => r.id)
+      let racaItensData: any[] = []
+      if (racaIds.length > 0) {
+        const { data } = await supabase
+          .from('catalogo_raca_itens')
+          .select('id, raca_id, grupo, nome, preco, inclui, duracao_min')
+          .in('raca_id', racaIds)
+        racaItensData = data || []
+      }
+
+      racas = (racasData || []).map((r: any) => ({ ...r, itens: racaItensData.filter(i => i.raca_id === r.id) }))
+
+      const { data: porteItensData } = await supabase
+        .from('catalogo_porte_itens')
+        .select('id, grupo, nome, pelagens, inclui, duracao_min')
+        .eq('tenant_id', tenant.id)
+
+      const porteItemIds = (porteItensData || []).map((i: any) => i.id)
+      let precosData: any[] = []
+      if (porteItemIds.length > 0) {
+        const { data } = await supabase
+          .from('catalogo_porte_precos')
+          .select('item_id, porte, preco')
+          .in('item_id', porteItemIds)
+        precosData = data || []
+      }
+
+      porteItens = (porteItensData || []).map((i: any) => ({ ...i, precos: precosData.filter(p => p.item_id === i.id) }))
+
+      setRacasCatalogo(racas)
+      setPorteItensCatalogo(porteItens)
+      setCatalogoCarregado(true)
+    }
+
+    const { data: pet } = await supabase
+      .from('pets')
+      .select('porte, pelagem, raca')
+      .eq('id', agendamento.pet_id)
+      .single()
+
+    if (!pet) return
+
+    const racaEncontrada = racas.find((r: any) => r.nome.toLowerCase() === (pet.raca || '').toLowerCase())
+
+    if (racaEncontrada) {
+      setItensParaEdicao(racaEncontrada.itens.map((i: any) => ({ ...i, preco: Number(i.preco) })))
+    } else {
+      const itensCompativeis = porteItens.filter((i: any) => {
+        const temPreco = i.precos.some((p: any) => p.porte === pet.porte)
+        const pelagemOk = !i.pelagens || i.pelagens.length === 0 || i.pelagens.includes(pet.pelagem)
+        return temPreco && pelagemOk
+      })
+      setItensParaEdicao(itensCompativeis.map((i: any) => ({
+        ...i,
+        preco: Number(i.precos.find((p: any) => p.porte === pet.porte)?.preco || 0),
+      })))
+    }
+  }
+
+  function toggleItemEdicao(item: any) {
+    const jaMarcado = itensSelecionadosEdicao.has(item.id)
+    const novo = new Set(itensSelecionadosEdicao)
+
+    const temPrincipal = itensParaEdicao.filter(i => i.grupo === 'principal' && novo.has(i.id)).length > 0
+    const temCombo = itensParaEdicao.filter(i => i.grupo === 'combo' && novo.has(i.id)).length > 0
+
+    if (jaMarcado) {
+      novo.delete(item.id)
+    } else {
+      if (item.grupo === 'principal' && temCombo) {
+        alert('Ja existe um Combo selecionado. Remova-o para escolher um servico avulso.')
+        return
+      }
+      if (item.grupo === 'combo' && temPrincipal) {
+        alert('Ja existe um servico de Banho e Tosa selecionado. Remova-o para escolher um Combo.')
+        return
+      }
+      novo.add(item.id)
+    }
+    setItensSelecionadosEdicao(novo)
+  }
+
+  async function salvarServicoEditado() {
+    if (!modalServico) return
+    setSalvandoServico(true)
+
+    const selecionados = itensParaEdicao.filter(i => itensSelecionadosEdicao.has(i.id))
+    const nomesServicos = selecionados.map(i => i.nome).join(' + ')
+    const total = selecionados.reduce((s, i) => s + Number(i.preco), 0)
+
+    await supabase
+      .from('appointments')
+      .update({
+        observacoes: nomesServicos || null,
+        preco_cobrado: total,
+        service_id: selecionados[0]?.id || modalServico.service_id,
+      })
+      .eq('id', modalServico.id)
+
+    setSalvandoServico(false)
+    setModalServico(null)
+    carregarAgendamentos()
+  }
     async function salvarNotasInternas() {
     if (!infoAberto) return
     setSalvandoNotas(true)
@@ -289,7 +423,12 @@ function enviarLembreteRapido(a: Agendamento) {
     carregarAgendamentos()
   }
 
-  async function aprovarAgendamento(agendamento: Agendamento) {
+    async function aprovarAgendamento(agendamento: Agendamento) {
+    if (!agendamento.observacoes) {
+      alert('Este agendamento nao tem servico definido. Reagende ou edite antes de aprovar.')
+      return
+    }
+
     await supabase.from('appointments').update({ status: 'agendado' }).eq('id', agendamento.id)
 
     const { data: tenant } = await supabase.from('tenants').select('id').single()
@@ -311,10 +450,51 @@ function enviarLembreteRapido(a: Agendamento) {
     carregarAgendamentos()
   }
 
-  async function recusarAgendamento(id: string) {
+    async function recusarAgendamento(id: string) {
     await supabase.from('appointments').update({ status: 'cancelado' }).eq('id', id)
     carregarAgendamentos()
   }
+
+  const agendamentosPorDia = agendamentos.reduce((acc: Record<string, Agendamento[]>, a) => {
+    const dia = formatarDataISO(new Date(a.inicio))
+    if (!acc[dia]) acc[dia] = []
+    acc[dia].push(a)
+    return acc
+  }, {})
+
+  function gerarDiasDaSemana(): string[] {
+    const base = new Date(dataFiltro + 'T00:00:00')
+    const diaSemana = base.getDay()
+    const inicioSemana = new Date(base)
+    inicioSemana.setDate(base.getDate() - diaSemana)
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(inicioSemana)
+      d.setDate(inicioSemana.getDate() + i)
+      return formatarDataISO(d)
+    })
+  }
+
+  function gerarDiasDoMes(): string[] {
+    const base = new Date(dataFiltro + 'T00:00:00')
+    const inicioMes = new Date(base.getFullYear(), base.getMonth(), 1)
+    const fimMes = new Date(base.getFullYear(), base.getMonth() + 1, 0)
+    const primeiroDiaSemana = inicioMes.getDay()
+    const dias: string[] = []
+
+    for (let i = 0; i < primeiroDiaSemana; i++) dias.push('')
+
+    for (let d = 1; d <= fimMes.getDate(); d++) {
+      dias.push(formatarDataISO(new Date(base.getFullYear(), base.getMonth(), d)))
+    }
+
+    return dias
+  }
+
+  function irParaDia(dia: string) {
+    setDataFiltro(dia)
+    setPeriodoFiltro('dia')
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -396,8 +576,74 @@ function enviarLembreteRapido(a: Agendamento) {
         </button>
       )}
 
-      {carregando ? (
+                  {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
+      ) : periodoFiltro === 'semana' ? (
+        <div className="grid grid-cols-7 gap-3">
+          {gerarDiasDaSemana().map(dia => {
+            const itens = (agendamentosPorDia[dia] || []).filter(a => a.status !== 'cancelado' && a.status !== 'faltou')
+            const dataObj = new Date(dia + 'T00:00:00')
+            const hoje = dia === formatarDataISO(new Date())
+            return (
+              <div key={dia} className="flex flex-col">
+                <button
+                  onClick={() => irParaDia(dia)}
+                  className={`rounded-lg px-2 py-2 mb-2 text-center transition-colors ${hoje ? 'bg-blue-600 text-white' : 'bg-gray-50 hover:bg-gray-100 text-gray-700'}`}
+                >
+                  <p className="text-[10px] uppercase">{dataObj.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</p>
+                  <p className="text-sm font-semibold">{dataObj.getDate()}</p>
+                </button>
+                <div className="flex flex-col gap-1.5">
+                  {itens.length === 0 && <p className="text-[10px] text-gray-300 text-center py-2">-</p>}
+                  {itens.map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => irParaDia(dia)}
+                      className="bg-white border border-gray-100 rounded-lg p-2 text-left hover:border-blue-300 transition-colors"
+                    >
+                      <p className="text-[10px] font-medium text-gray-900">
+                        {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      <p className="text-[11px] text-gray-600 truncate">{a.pets?.nome}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : periodoFiltro === 'mes' ? (
+        <div>
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].map(d => (
+              <p key={d} className="text-[10px] text-gray-400 text-center uppercase font-medium">{d}</p>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {gerarDiasDoMes().map((dia, i) => {
+              if (!dia) return <div key={`vazio-${i}`} />
+              const itens = (agendamentosPorDia[dia] || []).filter(a => a.status !== 'cancelado' && a.status !== 'faltou')
+              const dataObj = new Date(dia + 'T00:00:00')
+              const hoje = dia === formatarDataISO(new Date())
+              return (
+                <button
+                  key={dia}
+                  onClick={() => irParaDia(dia)}
+                  className={`aspect-square rounded-lg border p-2 flex flex-col items-center justify-center transition-colors ${
+                    hoje ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100 hover:border-blue-300'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{dataObj.getDate()}</p>
+                  {itens.length > 0 && (
+                    <span className={`text-[9px] mt-0.5 px-1.5 rounded-full ${hoje ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'}`}>
+                      {itens.length}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-5 gap-4">
           {COLUNAS.map(coluna => {
@@ -417,111 +663,34 @@ function enviarLembreteRapido(a: Agendamento) {
                   )}
 
                   {itens.map(a => (
-                    <div key={a.id} className="bg-white border border-gray-100 rounded-xl p-3">
-                      <div className="flex items-center justify-between mb-2">
+                    <button
+                      key={a.id}
+                      onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
+                      className="bg-white border border-gray-100 rounded-xl p-3 text-left hover:border-blue-300 hover:shadow-sm transition-all w-full"
+                    >
+                                            <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-900">
                           {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        <div
-                          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0"
-                          style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
-                        >
-                          {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
-                        </div>
-                      </div>
-
-                      <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
-                        {a.pets?.nome}
-                        {pacotesPorPet[a.pet_id] && (
-                          <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
-                            🎁 {pacotesPorPet[a.pet_id].usadas + 1}/{pacotesPorPet[a.pet_id].total}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{a.observacoes}</p>
-                      <p className="text-xs text-gray-400">{a.customers?.nome}</p>
-
-                      {a.precisa_transporte && (
-                        <div className="mt-2 bg-orange-50 rounded-lg px-2 py-1.5">
-                          <p className="text-[10px] font-medium text-orange-700">🚐 Transporte</p>
-                          {a.endereco_coleta && (
-                            <button
-                              onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.endereco_coleta || '')}`, '_blank')}
-                              className="text-[10px] text-orange-600 mt-0.5 underline block text-left"
-                            >
-                              📍 Coleta: {a.endereco_coleta}
-                            </button>
+                        <div className="flex items-center gap-1.5">
+                          {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
+                          {a.precisa_transporte && <span className="text-xs">🚐</span>}
+                          {pacotesPorPet[a.pet_id] && (
+                            <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
+                              🎁 {pacotesPorPet[a.pet_id].usadas + 1}/{pacotesPorPet[a.pet_id].total}
+                            </span>
                           )}
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0"
+                            style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
+                          >
+                            {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
+                          </div>
                         </div>
-                      )}
-                      <div className="flex gap-2 mt-3">
-                        {a.status === 'em_espera' ? (
-                          <>
-                            <button
-                              onClick={() => aprovarAgendamento(a)}
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
-                            >
-                              ✓ Aprovar
-                            </button>
-                            <button
-                              onClick={() => recusarAgendamento(a.id)}
-                              className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] py-1.5 rounded-lg transition-colors"
-                            >
-                              ✕ Recusar
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            {PROXIMO_STATUS[a.status] && (
-                              <button
-                                onClick={() => avancarStatus(a.id, a.status)}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
-                              >
-                                Avancar →
-                              </button>
-                            )}
-                            {a.status !== 'concluido' && (
-                              <button
-                                onClick={() => marcarFalta(a.id)}
-                                className="text-[11px] text-red-500 hover:underline px-2"
-                              >
-                                Faltou
-                              </button>
-                            )}
-                          </>
-                        )}
                       </div>
-                                            <div className="flex items-center justify-center gap-2 mt-2">
-                        <button
-                          onClick={() => setTicketAberto(a)}
-                          title="Imprimir ticket"
-                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
-                        >
-                          🎫
-                        </button>
-                        <button
-                          onClick={() => abrirReagendar(a)}
-                          title="Reagendar"
-                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
-                        >
-                          🔄
-                        </button>
-                        <button
-                          onClick={() => enviarLembreteRapido(a)}
-                          title="Lembrete WhatsApp"
-                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
-                        >
-                          💬
-                        </button>
-                                                <button
-                          onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
-                          title="Informacoes adicionais"
-                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
-                        >
-                          ℹ️
-                        </button>
-                      </div>
-                    </div>
+                      <p className="text-sm font-medium text-gray-900 truncate">{a.pets?.nome}</p>
+                      <p className="text-xs text-gray-400 truncate">{a.customers?.nome}</p>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -645,7 +814,22 @@ function enviarLembreteRapido(a: Agendamento) {
       {infoAberto && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={e => e.target === e.currentTarget && setInfoAberto(null)}>
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Informacoes do agendamento</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Informacoes do agendamento</h3>
+
+                        {!infoAberto.observacoes && (
+              <div className="bg-red-50 border border-red-100 rounded-lg p-3 mb-4">
+                <p className="text-sm text-red-700 font-medium">⚠️ Servico nao definido</p>
+                <p className="text-xs text-red-600 mt-0.5 mb-2">
+                  Este agendamento nao pode ser aprovado ate que um servico seja definido.
+                </p>
+                <button
+                  onClick={() => { abrirEditarServico(infoAberto); setInfoAberto(null) }}
+                  className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Definir servico agora
+                </button>
+              </div>
+            )}
 
             <div className="flex flex-col gap-3 text-sm">
               <div>
@@ -660,19 +844,27 @@ function enviarLembreteRapido(a: Agendamento) {
                 <p className="text-xs text-gray-400">Pet</p>
                 <p className="text-gray-900">{infoAberto.pets?.nome}</p>
               </div>
-              <div>
-                <p className="text-xs text-gray-400">Servicos</p>
-                <p className="text-gray-900">{infoAberto.observacoes}</p>
+                            <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-400">Servicos</p>
+                  <button
+                    onClick={() => { abrirEditarServico(infoAberto); setInfoAberto(null) }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    ✏️ Editar servicos
+                  </button>
+                </div>
+                <p className="text-gray-900">{infoAberto.observacoes || '-'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">Profissional</p>
                 <p className="text-gray-900">{infoAberto.professionals?.nome || 'Nao definido'}</p>
               </div>
-              <div>
+                            <div>
                 <p className="text-xs text-gray-400">Valor</p>
                 <p className="text-gray-900">R$ {Number(infoAberto.preco_cobrado || 0).toFixed(2).replace('.', ',')}</p>
               </div>
-                            {infoAberto.precisa_transporte && (
+              {infoAberto.precisa_transporte && (
                 <>
                   <div>
                     <p className="text-xs text-gray-400">Endereco de coleta</p>
@@ -684,6 +876,68 @@ function enviarLembreteRapido(a: Agendamento) {
                   </div>
                 </>
               )}
+
+              <div className="border-t border-gray-100 pt-3 flex gap-2">
+                {infoAberto.status === 'em_espera' ? (
+                  <>
+                    <button
+                      onClick={() => { aprovarAgendamento(infoAberto); setInfoAberto(null) }}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition-colors"
+                    >
+                      ✓ Aprovar
+                    </button>
+                    <button
+                      onClick={() => { recusarAgendamento(infoAberto.id); setInfoAberto(null) }}
+                      className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs py-2 rounded-lg transition-colors"
+                    >
+                      ✕ Recusar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {PROXIMO_STATUS[infoAberto.status] && (
+                      <button
+                        onClick={() => { avancarStatus(infoAberto.id, infoAberto.status); setInfoAberto(null) }}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors"
+                      >
+                        Avancar →
+                      </button>
+                    )}
+                    {infoAberto.status !== 'concluido' && (
+                      <button
+                        onClick={() => { marcarFalta(infoAberto.id); setInfoAberto(null) }}
+                        className="text-xs text-red-500 hover:underline px-2"
+                      >
+                        Faltou
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center justify-center gap-2">
+                                <button
+                  onClick={() => { setTicketAberto(infoAberto); setInfoAberto(null) }}
+                  title="Imprimir ticket"
+                  className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
+                >
+                  🎫
+                </button>
+                <button
+                  onClick={() => { abrirReagendar(infoAberto); setInfoAberto(null) }}
+                  title="Reagendar"
+                  className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
+                >
+                  🔄
+                </button>
+                <button
+                  onClick={() => enviarLembreteRapido(infoAberto)}
+                  title="Lembrete WhatsApp"
+                  className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
+                >
+                  💬
+                </button>
+              </div>
 
               <div className="border-t border-gray-100 pt-3">
                 <label className="text-xs text-gray-400 mb-1 block">
@@ -706,12 +960,74 @@ function enviarLembreteRapido(a: Agendamento) {
               >
                 Fechar
               </button>
-              <button
+                            <button
                 onClick={salvarNotasInternas}
                 disabled={salvandoNotas}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
               >
                 {salvandoNotas ? 'Salvando...' : 'Salvar observacao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalServico && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={e => e.target === e.currentTarget && setModalServico(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Editar servicos</h3>
+            <p className="text-sm text-gray-500 mb-4">{modalServico.pets?.nome} — {modalServico.customers?.nome}</p>
+
+            {itensParaEdicao.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">Nenhum servico compativel encontrado para este pet.</p>
+            ) : (
+              (['principal', 'adicional', 'combo'] as const).map(grupo => {
+                const itens = itensParaEdicao.filter(i => i.grupo === grupo)
+                if (itens.length === 0) return null
+                const titulo = grupo === 'principal' ? 'Banho e Tosa' : grupo === 'adicional' ? 'Adicionais' : 'Combos'
+                return (
+                  <div key={grupo} className="mb-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{titulo}</p>
+                    <div className="flex flex-col gap-1.5">
+                      {itens.map(item => {
+                        const checked = itensSelecionadosEdicao.has(item.id)
+                        return (
+                          <label key={item.id} className={`flex items-center justify-between gap-2 border rounded-lg px-3 py-2 cursor-pointer ${checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                            <span className="flex items-center gap-2">
+                              <input type="checkbox" checked={checked} onChange={() => toggleItemEdicao(item)} className="w-4 h-4" />
+                              <span className="text-sm text-gray-900">{item.nome}</span>
+                            </span>
+                            <span className="text-sm font-medium text-blue-600">{fmtMoeda(Number(item.preco))}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+
+            {itensSelecionadosEdicao.size > 0 && (
+              <div className="bg-blue-50 rounded-lg p-2.5 mb-4">
+                <p className="text-sm font-medium text-blue-700">
+                  Total: {fmtMoeda(itensParaEdicao.filter(i => itensSelecionadosEdicao.has(i.id)).reduce((s, i) => s + Number(i.preco), 0))}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setModalServico(null)}
+                className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarServicoEditado}
+                disabled={salvandoServico || itensSelecionadosEdicao.size === 0}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {salvandoServico ? 'Salvando...' : 'Salvar servicos'}
               </button>
             </div>
           </div>
