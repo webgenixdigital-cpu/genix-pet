@@ -159,7 +159,6 @@ export default function DashboardLayout({
     { id: 'inicio', href: '/dashboard', label: 'Início', icon: '🏠', liberado: true },
     { id: 'agenda', href: '/dashboard/agenda', label: 'Agenda', icon: '📅', liberado: true },
     { id: 'profissionais', href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️', liberado: true },
-    { id: 'servicos', href: '/dashboard/servicos', label: 'Serviços', icon: '🛁', liberado: true },
     { id: 'produtos', href: '/dashboard/produtos', label: 'Produtos', icon: '📦', liberado: permissoes.tem_catalogo_produtos },
     { id: 'pacotes', href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁', liberado: true },
     { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes', icon: '👥', liberado: true },

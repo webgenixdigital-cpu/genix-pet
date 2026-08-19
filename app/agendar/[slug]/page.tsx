@@ -65,19 +65,6 @@ type Profissional = {
   cor_agenda: string
 }
 
-const RACAS_CACHORRO = [
-  'SRD (Sem Raca Definida)', 'Labrador', 'Golden Retriever', 'Poodle', 'Bulldog Frances',
-  'Pastor Alemao', 'Shih Tzu', 'Yorkshire', 'Pinscher', 'Chihuahua', 'Lhasa Apso',
-  'Maltes', 'Beagle', 'Rottweiler', 'Border Collie', 'Spitz Alemao (Lulu da Pomerania)',
-  'Dachshund (Salsicha)', 'Boxer', 'Pug', 'Cocker Spaniel', 'Schnauzer', 'Basset Hound',
-  'Husky Siberiano', 'Akita', 'Doberman', 'Fox Paulistinha', 'Outra',
-]
-
-const RACAS_GATO = [
-  'SRD (Sem Raca Definida)', 'Persa', 'Siames', 'Maine Coon', 'Angora', 'Sphynx',
-  'Bengal', 'Ragdoll', 'Munchkin', 'Outra',
-]
-
 const PORTES: { id: PorteId; label: string }[] = [
   { id: 'mini', label: 'Mini (1 a 4 kg)' },
   { id: 'pequeno', label: 'Pequeno (4 a 9 kg)' },
