@@ -15,10 +15,11 @@ type Agendamento = {
   customer_id: string
   service_id: string
   pet_id: string
+    observacoes: string | null
+  notas_internas: string | null
   customers: { nome: string; telefone: string } | null
   pets: { nome: string } | null
   professionals: { nome: string; cor_agenda: string } | null
-  services: { nome: string } | null
 }
 
 const COLUNAS = [
@@ -49,7 +50,10 @@ export default function AgendaPage() {
   const [dataFiltro, setDataFiltro] = useState(formatarDataISO(new Date()))
   const [periodoFiltro, setPeriodoFiltro] = useState<'dia' | 'semana' | 'mes'>('dia')
   const [offsetCalendario, setOffsetCalendario] = useState(0)
-  const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
+    const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
+    const [infoAberto, setInfoAberto] = useState<Agendamento | null>(null)
+  const [notasInternas, setNotasInternas] = useState('')
+  const [salvandoNotas, setSalvandoNotas] = useState(false)
   const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
   const [novaData, setNovaData] = useState('')
   const [novoHorario, setNovoHorario] = useState('')
@@ -99,14 +103,13 @@ export default function AgendaPage() {
 
     const { inicio, fim } = calcularIntervalo()
 
-    const { data } = await supabase
+        const { data } = await supabase
       .from('appointments')
       .select(`
-        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id,
+                id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas,
         customers ( nome, telefone ),
         pets ( nome ),
-        professionals ( nome, cor_agenda ),
-        services ( nome )
+        professionals ( nome, cor_agenda )
       `)
       .eq('tenant_id', tenant.id)
       .gte('inicio', inicio + 'T00:00:00')
@@ -174,7 +177,7 @@ export default function AgendaPage() {
               tenant_id: tenant.id,
               tipo: 'receita',
               categoria: 'Servico',
-              descricao: `${agendamento.services?.nome} - ${agendamento.pets?.nome}`,
+              descricao: `${agendamento.observacoes || 'Servico'} - ${agendamento.pets?.nome}`,
               valor: agendamento.preco_cobrado || 0,
               data_lancamento: new Date().toISOString().split('T')[0],
               status: 'pendente',
@@ -243,10 +246,21 @@ function enviarLembreteRapido(a: Agendamento) {
     const dataFormatada = new Date(a.inicio).toLocaleDateString('pt-BR')
     const horarioFormatado = new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
-    const mensagem = `Ola! Passando para lembrar do agendamento de amanha:\n\n🐾 Pet: ${a.pets?.nome}\n✂️ Servico: ${a.services?.nome}\n📅 Data: ${dataFormatada}\n🕐 Horario: ${horarioFormatado}\n\nContamos com voce! Caso precise remarcar, e so nos avisar.`
-
+        const mensagem = `Ola! Passando para confirmar seu agendamento:\n\n🐾 Pet: ${a.pets?.nome}\n✂️ Servico: ${a.observacoes || 'Servico'}\n📅 Data: ${dataFormatada}\n🕐 Horario: ${horarioFormatado}\n\nConfira e confirme pra nos se esta correto.`
     const link = `https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`
     window.open(link, '_blank')
+  }
+    async function salvarNotasInternas() {
+    if (!infoAberto) return
+    setSalvandoNotas(true)
+
+    await supabase
+      .from('appointments')
+      .update({ notas_internas: notasInternas })
+      .eq('id', infoAberto.id)
+
+    setSalvandoNotas(false)
+    carregarAgendamentos()
   }
   function abrirReagendar(a: Agendamento) {
     setModalReagendar(a)
@@ -287,7 +301,7 @@ function enviarLembreteRapido(a: Agendamento) {
           tenantId: tenant.id,
           telefone: agendamento.customers?.telefone,
           nomePet: agendamento.pets?.nome,
-          servico: agendamento.services?.nome,
+                    servico: agendamento.observacoes || 'Servico',
           data: new Date(agendamento.inicio).toLocaleDateString('pt-BR'),
           horario: new Date(agendamento.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         }),
@@ -424,7 +438,7 @@ function enviarLembreteRapido(a: Agendamento) {
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{a.services?.nome}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{a.observacoes}</p>
                       <p className="text-xs text-gray-400">{a.customers?.nome}</p>
 
                       {a.precisa_transporte && (
@@ -477,24 +491,36 @@ function enviarLembreteRapido(a: Agendamento) {
                           </>
                         )}
                       </div>
-                      <button
-                        onClick={() => setTicketAberto(a)}
-                        className="text-[11px] text-gray-500 hover:underline mt-1 block w-full text-center"
-                      >
-                        🎫 Imprimir ticket
-                      </button>
-                      <button
-                        onClick={() => abrirReagendar(a)}
-                        className="text-[11px] text-blue-600 hover:underline mt-1 block w-full text-center"
-                      >
-                        🔄 Reagendar
-                      </button>
-                      <button
-                        onClick={() => enviarLembreteRapido(a)}
-                        className="text-[11px] text-green-600 hover:underline mt-1 block w-full text-center"
-                      >
-                        💬 Lembrete WhatsApp
-                      </button>
+                                            <div className="flex items-center justify-center gap-2 mt-2">
+                        <button
+                          onClick={() => setTicketAberto(a)}
+                          title="Imprimir ticket"
+                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
+                        >
+                          🎫
+                        </button>
+                        <button
+                          onClick={() => abrirReagendar(a)}
+                          title="Reagendar"
+                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
+                        >
+                          🔄
+                        </button>
+                        <button
+                          onClick={() => enviarLembreteRapido(a)}
+                          title="Lembrete WhatsApp"
+                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
+                        >
+                          💬
+                        </button>
+                                                <button
+                          onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
+                          title="Informacoes adicionais"
+                          className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
+                        >
+                          ℹ️
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -534,7 +560,7 @@ function enviarLembreteRapido(a: Agendamento) {
               <p>Cliente: {ticketAberto.customers?.nome}</p>
               <p>Telefone: {ticketAberto.customers?.telefone}</p>
               <p>Pet: {ticketAberto.pets?.nome}</p>
-              <p>Servico: {ticketAberto.services?.nome}</p>
+                            <p>Servico: {ticketAberto.observacoes}</p>
               <p>Horario: {new Date(ticketAberto.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
               {ticketAberto.professionals?.nome && <p>Profissional: {ticketAberto.professionals.nome}</p>}
               {ticketAberto.precisa_transporte && (
@@ -603,7 +629,7 @@ function enviarLembreteRapido(a: Agendamento) {
                 >
                   Cancelar
                 </button>
-                <button
+                                <button
                   onClick={confirmarReagendamento}
                   disabled={reagendando}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
@@ -611,6 +637,82 @@ function enviarLembreteRapido(a: Agendamento) {
                   {reagendando ? 'Salvando...' : 'Confirmar reagendamento'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {infoAberto && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={e => e.target === e.currentTarget && setInfoAberto(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Informacoes do agendamento</h3>
+
+            <div className="flex flex-col gap-3 text-sm">
+              <div>
+                <p className="text-xs text-gray-400">Cliente</p>
+                <p className="text-gray-900">{infoAberto.customers?.nome}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Telefone</p>
+                <p className="text-gray-900">{infoAberto.customers?.telefone}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Pet</p>
+                <p className="text-gray-900">{infoAberto.pets?.nome}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Servicos</p>
+                <p className="text-gray-900">{infoAberto.observacoes}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Profissional</p>
+                <p className="text-gray-900">{infoAberto.professionals?.nome || 'Nao definido'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Valor</p>
+                <p className="text-gray-900">R$ {Number(infoAberto.preco_cobrado || 0).toFixed(2).replace('.', ',')}</p>
+              </div>
+                            {infoAberto.precisa_transporte && (
+                <>
+                  <div>
+                    <p className="text-xs text-gray-400">Endereco de coleta</p>
+                    <p className="text-gray-900">{infoAberto.endereco_coleta}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">Endereco de entrega</p>
+                    <p className="text-gray-900">{infoAberto.endereco_entrega}</p>
+                  </div>
+                </>
+              )}
+
+              <div className="border-t border-gray-100 pt-3">
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Observacoes (alergia, cirurgia recente, sem perfume, etc)
+                </label>
+                <textarea
+                  value={notasInternas}
+                  onChange={e => setNotasInternas(e.target.value)}
+                  placeholder="Adicione uma observacao..."
+                  rows={3}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setInfoAberto(null)}
+                className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={salvarNotasInternas}
+                disabled={salvandoNotas}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {salvandoNotas ? 'Salvando...' : 'Salvar observacao'}
+              </button>
             </div>
           </div>
         </div>

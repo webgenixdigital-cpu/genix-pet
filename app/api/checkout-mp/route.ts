@@ -50,11 +50,11 @@ export async function POST(request: NextRequest) {
 
     const preapproval = new PreApproval(client)
 
-    const resultado = await preapproval.create({
+        const resultado = await preapproval.create({
       body: {
         reason: `Genix Pet - Plano ${planoData.nome}`,
         external_reference: `${tenant.id}:${planoData.id}`,
-        payer_email: user.email,
+                payer_email: user.email,
         auto_recurring: {
           frequency: 1,
           frequency_type: 'months',
