@@ -306,17 +306,31 @@ function ConfiguracoesConteudo() {
     setSalvandoWhatsapp(false)
   }
 
-    async function assinar(plano: string) {
+      async function assinar(plano: string) {
     setCarregando(plano)
 
-    const { data: { session } } = await supabase.auth.getSession()
-
-    const res = await fetch('/api/checkout-mp', {
+    const res = await fetch('/api/checkout', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plano }),
+    })
+
+    const data = await res.json()
+
+    if (data.url) {
+      window.location.href = data.url
+    } else {
+      alert('Erro ao iniciar checkout: ' + (data.error || 'desconhecido'))
+      setCarregando(null)
+    }
+  }
+
+  async function assinarComPix(plano: string) {
+    setCarregando(plano + '-pix')
+
+    const res = await fetch('/api/checkout-pix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plano }),
     })
 
@@ -408,7 +422,7 @@ function ConfiguracoesConteudo() {
                   </li>
                 ))}
               </ul>
-              <button
+                             <button
                 onClick={() => assinar(p.id)}
                 disabled={carregando === p.id}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"

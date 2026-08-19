@@ -28,10 +28,10 @@ export async function POST(request: NextRequest) {
     const tenantId = session.metadata?.tenant_id
     const plano = session.metadata?.plano
 
-    if (tenantId) {
+        if (tenantId) {
       const nomesPlano: Record<string, string> = {
         starter: 'Starter',
-        premium: 'Crescimento',
+        premium: 'Premium',
         pro: 'Pro',
       }
 
@@ -41,21 +41,37 @@ export async function POST(request: NextRequest) {
         .eq('nome', nomesPlano[plano] || 'Starter')
         .single()
 
-      await supabaseAdmin
-        .from('tenants')
-        .update({ status: 'active', plan_id: planoEncontrado?.id })
-        .eq('id', tenantId)
+      const ehPix = session.metadata?.tipo === 'pix_avulso'
 
-      await supabaseAdmin
-        .from('subscriptions')
-        .upsert({
-          tenant_id: tenantId,
-          plan_id: planoEncontrado?.id,
-          status: 'active',
-          preco_atual: session.amount_total / 100,
-          stripe_customer_id: session.customer,
-          stripe_subscription_id: session.subscription,
-        }, { onConflict: 'tenant_id' })
+      if (ehPix) {
+        const expiraEm = new Date()
+        expiraEm.setDate(expiraEm.getDate() + 30)
+
+        await supabaseAdmin
+          .from('tenants')
+          .update({
+            status: 'active',
+            plan_id: planoEncontrado?.id,
+            plano_expira_em: expiraEm.toISOString().split('T')[0],
+          })
+          .eq('id', tenantId)
+      } else {
+        await supabaseAdmin
+          .from('tenants')
+          .update({ status: 'active', plan_id: planoEncontrado?.id })
+          .eq('id', tenantId)
+
+        await supabaseAdmin
+          .from('subscriptions')
+          .upsert({
+            tenant_id: tenantId,
+            plan_id: planoEncontrado?.id,
+            status: 'active',
+            preco_atual: session.amount_total / 100,
+            stripe_customer_id: session.customer,
+            stripe_subscription_id: session.subscription,
+          }, { onConflict: 'tenant_id' })
+      }
     }
   }
 
