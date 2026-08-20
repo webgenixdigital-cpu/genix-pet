@@ -345,29 +345,52 @@ function StepRacas({
   onVoltar: () => void;
   onSelecionar: (r: Raca) => void;
 }) {
+  const [busca, setBusca] = useState("");
+
+  const racasFiltradas = racas
+    .filter((r) => r.nome.toLowerCase().includes(busca.trim().toLowerCase()))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
   return (
     <div>
       <BackButton onClick={onVoltar} />
       <h2 className="text-lg font-bold mb-1">Qual a raça do seu pet?</h2>
-      <p className="text-sm text-slate-500 mb-5">Selecione a raça para ver os serviços recomendados.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-        {racas.map((r) => (
+      <p className="text-sm text-slate-500 mb-4">Digite o nome da raça para encontrar mais rápido.</p>
+
+      <div className="relative mb-4">
+        <input
+          type="text"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar raça... (ex: poodle, golden, shih tzu)"
+          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
+          autoFocus
+        />
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+      </div>
+
+      <div className="flex flex-col gap-2 max-h-[420px] overflow-y-auto pr-1">
+        {racasFiltradas.map((r) => (
           <button
             key={r.id}
-            className="border-2 border-slate-200 rounded-2xl p-4 flex flex-col items-center gap-2 hover:border-blue-600 hover:shadow-lg hover:-translate-y-0.5 transition"
+            className="flex items-center gap-3 border-2 border-slate-200 rounded-xl px-3 py-2.5 text-left hover:border-blue-600 hover:bg-blue-50 transition"
             onClick={() => onSelecionar(r)}
           >
             {r.imagem_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={r.imagem_url} alt={r.nome} className="w-14 h-14 rounded-full object-cover bg-slate-100" />
+              <img src={r.imagem_url} alt={r.nome} className="w-10 h-10 rounded-full object-cover bg-slate-100 shrink-0" />
             ) : (
-              <div className="text-3xl">🐶</div>
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-lg shrink-0">🐶</div>
             )}
             <div className="font-semibold text-sm">{r.nome}</div>
           </button>
         ))}
-        {racas.length === 0 && <p className="text-sm text-slate-400 col-span-full text-center py-8">Nenhuma raça cadastrada ainda.</p>}
+        {racasFiltradas.length === 0 && racas.length > 0 && (
+          <p className="text-sm text-slate-400 text-center py-8">Nenhuma raça encontrada para "{busca}".</p>
+        )}
+        {racas.length === 0 && <p className="text-sm text-slate-400 text-center py-8">Nenhuma raça cadastrada ainda.</p>}
       </div>
+
     </div>
   );
 }

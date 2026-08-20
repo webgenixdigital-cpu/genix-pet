@@ -31,10 +31,11 @@ export default function DashboardLayout({
   const [boasVindasAberto, setBoasVindasAberto] = useState(false)
   const [passoAtual, setPassoAtual] = useState(0)
   const [posicaoSpotlight, setPosicaoSpotlight] = useState({ top: 0, left: 0, width: 0, height: 0 })
-  const [permissoes, setPermissoes] = useState({
+    const [permissoes, setPermissoes] = useState({
     tem_whatsapp: true,
     tem_catalogo_produtos: true,
     tem_modulo_financeiro: true,
+    tem_relatorio_fiscal: true,
   })
 
   useEffect(() => {
@@ -48,11 +49,12 @@ export default function DashboardLayout({
         .eq('email', user.email)
         .single()
 
-      if (tenant?.status === 'trial') {
+            if (tenant?.status === 'trial') {
         setPermissoes({
           tem_whatsapp: true,
           tem_catalogo_produtos: true,
           tem_modulo_financeiro: true,
+          tem_relatorio_fiscal: true,
         })
         return
       }
@@ -61,7 +63,7 @@ export default function DashboardLayout({
 
       const { data: plano } = await supabase
         .from('plans')
-        .select('tem_whatsapp, tem_catalogo_produtos, tem_modulo_financeiro')
+        .select('tem_whatsapp, tem_catalogo_produtos, tem_modulo_financeiro, tem_relatorio_fiscal')
         .eq('id', tenant.plan_id)
         .single()
 
@@ -70,6 +72,7 @@ export default function DashboardLayout({
           tem_whatsapp: plano.tem_whatsapp,
           tem_catalogo_produtos: plano.tem_catalogo_produtos,
           tem_modulo_financeiro: plano.tem_modulo_financeiro,
+          tem_relatorio_fiscal: plano.tem_relatorio_fiscal,
         })
       }
     }
@@ -155,16 +158,17 @@ export default function DashboardLayout({
     router.push('/login')
   }
 
-  const menu = [
+    const menu = [
     { id: 'inicio', href: '/dashboard', label: 'Início', icon: '🏠', liberado: true },
     { id: 'agenda', href: '/dashboard/agenda', label: 'Agenda', icon: '📅', liberado: true },
     { id: 'profissionais', href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️', liberado: true },
-    { id: 'produtos', href: '/dashboard/produtos', label: 'Produtos', icon: '📦', liberado: permissoes.tem_catalogo_produtos },
+    { id: 'catalogo', href: '/dashboard/catalogo', label: 'Catalogo', icon: '📖', liberado: true },
+    { id: 'produtos', href: '/dashboard/produtos', label: 'Produtos', icon: '📦', liberado: true },
     { id: 'pacotes', href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁', liberado: true },
     { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes', icon: '👥', liberado: true },
-    { id: 'financeiro', href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰', liberado: permissoes.tem_modulo_financeiro },
+    { id: 'financeiro', href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰', liberado: true },
     { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa', icon: '💵', liberado: true },
-    { id: 'relatorio-fiscal', href: '/dashboard/relatorio-fiscal', label: 'Relatorio Fiscal', icon: '📄', liberado: permissoes.tem_modulo_financeiro },
+    { id: 'relatorio-fiscal', href: '/dashboard/relatorio-fiscal', label: 'Relatorio Fiscal', icon: '📄', liberado: permissoes.tem_relatorio_fiscal },
     { id: 'configuracoes', href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️', liberado: true },
     { id: 'suporte', href: '/dashboard/suporte', label: 'Suporte', icon: '🎧', liberado: true },
   ]

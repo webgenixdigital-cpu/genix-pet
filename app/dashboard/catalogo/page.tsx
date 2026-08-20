@@ -60,6 +60,7 @@ interface RacaItem {
   destaque: boolean;
   imagem_url: string | null;
   duracao_min: number | null;
+  eh_banho_base: boolean;
 }
 
 interface PorteItem {
@@ -72,6 +73,7 @@ interface PorteItem {
   imagem_url: string | null;
   pelagens: string[] | null;
   duracao_min: number | null;
+  eh_banho_base: boolean;
   precos: Partial<Record<PorteId, number | null>>;
 }
 
@@ -178,7 +180,7 @@ export default function CatalogoAdminPage() {
       if (racaIds.length) {
         const { data: itensData } = await supabase
           .from("catalogo_raca_itens")
-          .select("id, raca_id, grupo, nome, descricao, preco, tosa_tipo, inclui, destaque, imagem_url, duracao_min")
+          .select("id, raca_id, grupo, nome, descricao, preco, tosa_tipo, inclui, destaque, imagem_url, duracao_min, eh_banho_base")
           .in("raca_id", racaIds)
           .order("ordem", { ascending: true });
 
@@ -192,7 +194,7 @@ export default function CatalogoAdminPage() {
 
       const { data: porteItensData } = await supabase
         .from("catalogo_porte_itens")
-        .select("id, grupo, nome, descricao, tosa_tipo, inclui, imagem_url, pelagens, duracao_min")
+        .select("id, grupo, nome, descricao, tosa_tipo, inclui, imagem_url, pelagens, duracao_min, eh_banho_base")
         .eq("tenant_id", tenant.id)
         .order("ordem", { ascending: true });
 
@@ -304,9 +306,10 @@ export default function CatalogoAdminPage() {
         nome: "Novo item",
         descricao: "",
         preco: 0,
+        eh_banho_base: false,
         ordem: (racaItens[racaId] ?? []).length,
       })
-      .select("id, raca_id, grupo, nome, descricao, preco, tosa_tipo, inclui, destaque, imagem_url, duracao_min")
+      .select("id, raca_id, grupo, nome, descricao, preco, tosa_tipo, inclui, destaque, imagem_url, duracao_min, eh_banho_base")
       .single();
     if (error) return alert("Erro: " + error.message);
     setRacaItens({
@@ -336,6 +339,7 @@ export default function CatalogoAdminPage() {
         destaque: item.destaque,
         imagem_url: item.imagem_url,
         duracao_min: item.duracao_min,
+        eh_banho_base: item.eh_banho_base,
       })
       .eq("id", itemId);
     if (error) alert("Erro: " + error.message);
@@ -353,8 +357,8 @@ export default function CatalogoAdminPage() {
     if (!tenantId) return;
     const { data, error } = await supabase
       .from("catalogo_porte_itens")
-      .insert({ tenant_id: tenantId, grupo, nome: "Novo item", descricao: "", ordem: porteItens.length })
-      .select("id, grupo, nome, descricao, tosa_tipo, inclui, imagem_url, pelagens, duracao_min")
+      .insert({ tenant_id: tenantId, grupo, nome: "Novo item", descricao: "", eh_banho_base: false, ordem: porteItens.length })
+      .select("id, grupo, nome, descricao, tosa_tipo, inclui, imagem_url, pelagens, duracao_min, eh_banho_base")
       .single();
     if (error) return alert("Erro: " + error.message);
 
@@ -391,6 +395,7 @@ export default function CatalogoAdminPage() {
         imagem_url: item.imagem_url,
         pelagens: item.pelagens,
         duracao_min: item.duracao_min,
+        eh_banho_base: item.eh_banho_base,
       })
       .eq("id", itemId);
     if (errItem) return alert("Erro: " + errItem.message);
@@ -627,6 +632,7 @@ export default function CatalogoAdminPage() {
                         expandido={itensExpandidos.has(item.id)}
                         onToggleExpandir={() => toggleItemExpandido(item.id)}
                         mostrarInclui={grupo === "combo"}
+                        mostrarBanhoBase={grupo === "principal"}
                         tiposTosa={tiposTosa}
                         onChange={(campo, valor) => atualizarItemRacaLocal(raca.id, item.id, campo, valor)}
                         onSalvar={() => salvarItemRaca(raca.id, item.id)}
@@ -724,6 +730,7 @@ export default function CatalogoAdminPage() {
                   onToggleExpandir={() => toggleItemExpandido(item.id)}
                   mostrarInclui={aba === "porte-combo"}
                   mostrarPelagem
+                  mostrarBanhoBase={aba === "porte-principal"}
                   tiposTosa={tiposTosa}
                   onChange={(campo, valor) => atualizarItemPorteLocal(item.id, campo as any, valor)}
                   onSalvar={() => salvarItemPorte(item.id)}
@@ -919,6 +926,7 @@ function ItemForm({
   item,
   mostrarInclui,
   mostrarPelagem,
+  mostrarBanhoBase,
   tiposTosa,
   expandido,
   onToggleExpandir,
@@ -928,9 +936,10 @@ function ItemForm({
   ocultarSalvarIndividual,
 }: {
   tenantId: string;
-  item: { id: string; nome: string; descricao: string | null; preco?: number; tosa_tipo: TosaTipo | null; inclui: string[] | null; destaque?: boolean; imagem_url?: string | null; pelagens?: string[] | null; duracao_min?: number | null };
+  item: { id: string; nome: string; descricao: string | null; preco?: number; tosa_tipo: TosaTipo | null; inclui: string[] | null; destaque?: boolean; imagem_url?: string | null; pelagens?: string[] | null; duracao_min?: number | null; eh_banho_base?: boolean };
   mostrarInclui: boolean;
   mostrarPelagem?: boolean;
+  mostrarBanhoBase?: boolean;
   tiposTosa: TipoTosa[];
   expandido: boolean;
   onToggleExpandir: () => void;
@@ -1019,6 +1028,17 @@ function ItemForm({
           onChange={(e) => onChange("duracao_min", e.target.value === "" ? null : parseInt(e.target.value, 10) || 0)}
         />
       </div>
+      {mostrarBanhoBase && (
+        <label className="flex items-center gap-2 mb-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            className="w-4 h-4 accent-blue-600"
+            checked={!!item.eh_banho_base}
+            onChange={(e) => onChange("eh_banho_base", e.target.checked)}
+          />
+          <span className="text-sm font-semibold text-slate-700">⭐ Este é o banho base (usado para gerar pacotes)</span>
+        </label>
+      )}
       {mostrarPelagem && (
         <div className="mb-2.5">
           <label className="text-xs font-semibold text-slate-500 block mb-1">Pelagem para a qual este item vale</label>

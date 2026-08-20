@@ -21,8 +21,7 @@ const PLANOS = [
     preco: '179,90',
     desc: 'Até 2 profissionais',
     destaque: false,
-    itens: [
-            'Agendamento online público',
+        itens: [
       'Clientes e pets ilimitados',
       'Módulo financeiro e comissões',
       'Produtos e pacotes de serviço',

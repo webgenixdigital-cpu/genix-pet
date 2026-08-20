@@ -7,8 +7,8 @@ import { createClient } from '@/lib/supabase'
 
 const PLANOS = [
   {
-    id: 'starter', nome: 'Starter', preco: 'R$ 179,90', desc: 'Ate 2 profissionais',
-    itens: ['Agendamento online publico', 'Clientes e pets ilimitados', 'Modulo financeiro e comissoes', 'Produtos e pacotes de servico', 'Agendamentos recorrentes'],
+        id: 'starter', nome: 'Starter', preco: 'R$ 179,90', desc: 'Ate 2 profissionais',
+    itens: ['Clientes e pets ilimitados', 'Modulo financeiro e comissoes', 'Produtos e pacotes de servico', 'Agendamentos recorrentes'],
   },
   {
     id: 'premium', nome: 'Premium', preco: 'R$ 247,90', desc: 'Ate 4 profissionais',

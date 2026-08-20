@@ -171,13 +171,31 @@ export default function AgendarPage() {
   const [faixasTransporte, setFaixasTransporte] = useState<{ raio_min_km: number; raio_max_km: number; valor_fixo: number }[]>([])
   useEffect(() => {
     async function carregar() {
-      const { data: tenantData } = await supabase
+            const { data: tenantData } = await supabase
         .from('tenants')
-        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte')
+        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte, plan_id')
         .eq('slug', slug)
         .single()
 
       if (!tenantData) {
+        setNaoEncontrado(true)
+        setCarregando(false)
+        return
+      }
+
+            if (tenantData.plan_id) {
+        const { data: plano } = await supabase
+          .from('plans')
+          .select('tem_catalogo_publico')
+          .eq('id', tenantData.plan_id)
+          .single()
+
+                if (!plano?.tem_catalogo_publico) {
+          setNaoEncontrado(true)
+          setCarregando(false)
+          return
+        }
+      } else {
         setNaoEncontrado(true)
         setCarregando(false)
         return
