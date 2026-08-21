@@ -1,8 +1,21 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+
+type Tenant = {
+  id: string
+  nome: string
+  slug: string
+  logo_url: string | null
+  cor_primaria: string
+  endereco_lat: number | null
+  endereco_lng: number | null
+  preco_por_km: number | null
+  valor_minimo_transporte: number | null
+  plan_id: string | null
+}
 
 type PorteId = 'mini' | 'pequeno' | 'medio' | 'grande' | 'extra_grande' | 'gigante'
 type Grupo = 'principal' | 'adicional' | 'combo'
@@ -15,7 +28,6 @@ type RacaItem = {
   descricao: string | null
   preco: number
   tosa_tipo: string | null
-  inclui: string[] | null
   duracao_min: number | null
 }
 
@@ -32,7 +44,6 @@ type PorteItem = {
   nome: string
   descricao: string | null
   tosa_tipo: string | null
-  inclui: string[] | null
   pelagens: string[] | null
   duracao_min: number | null
   precos: { porte: string; preco: number }[]
@@ -40,8 +51,27 @@ type PorteItem = {
 
 type TipoTosa = { id: string; nome: string; descricao: string }
 type Profissional = { id: string; nome: string; cor_agenda: string }
-type Pet = { id: string; nome: string; porte: string | null; raca: string | null; pelagem: string | null }
-type ClienteEncontrado = { id: string; nome: string; telefone: string; pets: Pet[] }
+
+type PetNoAgendamento = {
+  chave: string
+  nome: string
+  especie: string
+  petIdExistente: string | null
+  porte: PorteId
+  pelagem: string
+  usarFluxoRaca: boolean | null
+  racaSelecionada: Raca | null
+  itensSelecionados: Set<string>
+}
+
+function petEmBranco(): PetNoAgendamento {
+  return {
+    chave: Math.random().toString(36).slice(2),
+    nome: '', especie: 'cachorro', petIdExistente: null,
+    porte: 'medio', pelagem: 'curta',
+    usarFluxoRaca: null, racaSelecionada: null, itensSelecionados: new Set(),
+  }
+}
 
 const PORTES: { id: PorteId; label: string }[] = [
   { id: 'mini', label: 'Mini (1 a 4 kg)' },
@@ -67,178 +97,176 @@ function gerarHorarios(inicio: string, fim: string, duracaoMin: number): string[
   return horarios
 }
 
+function formatarDataISO(data: Date): string {
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
+
 function fmtMoeda(v: number): string {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
 }
 
-export default function NovoAgendamentoPage() {
-  const router = useRouter()
+export default function AgendarPage() {
+  const params = useParams()
+  const slug = params.slug as string
   const supabase = createClient()
 
+  const [tenant, setTenant] = useState<Tenant | null>(null)
   const [racas, setRacas] = useState<Raca[]>([])
   const [porteItens, setPorteItens] = useState<PorteItem[]>([])
   const [tiposTosa, setTiposTosa] = useState<TipoTosa[]>([])
   const [profissionais, setProfissionais] = useState<Profissional[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [naoEncontrado, setNaoEncontrado] = useState(false)
 
-  const [telefone, setTelefone] = useState('')
-  const [nomeCliente, setNomeCliente] = useState('')
-  const [clienteEncontrado, setClienteEncontrado] = useState<ClienteEncontrado | null>(null)
-  const [buscandoCliente, setBuscandoCliente] = useState(false)
-  const [sugestoes, setSugestoes] = useState<ClienteEncontrado[]>([])
-  const [buscaTexto, setBuscaTexto] = useState('')
-
-  const [nomePetNovo, setNomePetNovo] = useState('')
-  const [petSelecionado, setPetSelecionado] = useState('')
-  const [portePet, setPortePet] = useState<PorteId>('medio')
-  const [pelagemPet, setPelagemPet] = useState('curta')
-
-  const [usarFluxoRaca, setUsarFluxoRaca] = useState<boolean | null>(null)
-  const [racaSelecionadaCatalogo, setRacaSelecionadaCatalogo] = useState<Raca | null>(null)
+  const [etapa, setEtapa] = useState(1)
   const [buscaRaca, setBuscaRaca] = useState('')
-  const [itensRacaSelecionados, setItensRacaSelecionados] = useState<Set<string>>(new Set())
-  const [itensPorteSelecionados, setItensPorteSelecionados] = useState<Set<string>>(new Set())
-    const [modalTosa, setModalTosa] = useState<{ titulo: string; texto: string } | null>(null)
-  const [modalCombo, setModalCombo] = useState<{ titulo: string; itens: string[] } | null>(null)
+  const [modalTosa, setModalTosa] = useState<{ titulo: string; texto: string } | null>(null)
 
-  const [profissionalId, setProfissionalId] = useState('')
-  const [data, setData] = useState('')
+  const [nomeCliente, setNomeCliente] = useState('')
+  const [telefoneCliente, setTelefoneCliente] = useState('')
+  const [clienteExistente, setClienteExistente] = useState<any>(null)
+  const [sugestoesClientes, setSugestoesClientes] = useState<any[]>([])
+  const [petsDoCliente, setPetsDoCliente] = useState<any[]>([])
+  const [buscandoCliente, setBuscandoCliente] = useState(false)
+
+  // Arquitetura nova: um pet "em construcao" por vez, e uma lista dos ja confirmados
+  const [petAtual, setPetAtual] = useState<PetNoAgendamento>(petEmBranco())
+  const [petsConfirmados, setPetsConfirmados] = useState<PetNoAgendamento[]>([])
+    const [subPassoPet, setSubPassoPet] = useState<'nome' | 'perfil' | 'servicos' | 'confirmado'>('nome')
+  const [mostrarFormNovoPet, setMostrarFormNovoPet] = useState(false)
+
+  const [profissionalSelecionado, setProfissionalSelecionado] = useState<Profissional | null>(null)
+  const [dataSelecionada, setDataSelecionada] = useState<string>('')
   const [horariosDisponiveis, setHorariosDisponiveis] = useState<string[]>([])
-  const [horario, setHorario] = useState('')
+  const [horarioSelecionado, setHorarioSelecionado] = useState<string>('')
   const [carregandoHorarios, setCarregandoHorarios] = useState(false)
 
-  const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState('')
-  const [sucesso, setSucesso] = useState(false)
+  const [salvandoAgendamento, setSalvandoAgendamento] = useState(false)
+  const [erroAgendamento, setErroAgendamento] = useState('')
+  const [agendamentoConfirmado, setAgendamentoConfirmado] = useState(false)
 
-  const [tenantId, setTenantId] = useState<string | null>(null)
-  const [tenantTransporte, setTenantTransporte] = useState<{
-    endereco_lat: number | null
-    endereco_lng: number | null
-    preco_por_km: number | null
-    valor_minimo_transporte: number | null
-  } | null>(null)
-
-  const [precisaTransporte, setPrecisaTransporte] = useState(false)
-  const [cepColeta, setCepColeta] = useState('')
+    const [precisaTransporte, setPrecisaTransporte] = useState(false)
   const [ruaColeta, setRuaColeta] = useState('')
   const [numeroColeta, setNumeroColeta] = useState('')
   const [bairroColeta, setBairroColeta] = useState('')
   const [cidadeColeta, setCidadeColeta] = useState('')
   const [ufColeta, setUfColeta] = useState('')
+  const [ehRecorrente, setEhRecorrente] = useState(false)
+  const [frequenciaMensal, setFrequenciaMensal] = useState(1)
+  const [cepColeta, setCepColeta] = useState('')
   const [buscandoCep, setBuscandoCep] = useState(false)
+  const [faixasTransporte, setFaixasTransporte] = useState<{ raio_min_km: number; raio_max_km: number; valor_fixo: number }[]>([])
   const [transporteIdaVolta, setTransporteIdaVolta] = useState(false)
   const [distanciaKm, setDistanciaKm] = useState<number | null>(null)
   const [calculandoDistancia, setCalculandoDistancia] = useState(false)
-  const [descontoTransporte, setDescontoTransporte] = useState('0')
-  const [faixasTransporte, setFaixasTransporte] = useState<{ raio_min_km: number; raio_max_km: number; valor_fixo: number }[]>([])
   
-  async function carregarDados() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+  useEffect(() => {
+    async function carregar() {
+            const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setNaoEncontrado(true)
+        setCarregando(false)
+        return
+      }
+
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte, plan_id')
+        .eq('email', user.email)
+        .single()
+
+      if (!tenantData) {
+        setNaoEncontrado(true)
+        setCarregando(false)
+        return
+      }
+
+      setTenant(tenantData)
+
+      const { data: racasData } = await supabase
+        .from('catalogo_racas')
+        .select('id, nome, imagem_url')
+        .eq('tenant_id', tenantData.id)
+        .order('nome')
+
+      const racaIds = (racasData || []).map((r: any) => r.id)
+      let racaItensData: any[] = []
+      if (racaIds.length > 0) {
+        const { data } = await supabase
+          .from('catalogo_raca_itens')
+          .select('id, raca_id, grupo, nome, descricao, preco, tosa_tipo, duracao_min')
+          .in('raca_id', racaIds)
+        racaItensData = data || []
+      }
+
+      const racasMontadas: Raca[] = (racasData || []).map((r: any) => ({
+        ...r,
+        itens: racaItensData.filter(i => i.raca_id === r.id),
+      }))
+
+      const { data: porteItensData } = await supabase
+        .from('catalogo_porte_itens')
+        .select('id, grupo, nome, descricao, tosa_tipo, pelagens, duracao_min')
+        .eq('tenant_id', tenantData.id)
+        .order('nome')
+
+      const porteItemIds = (porteItensData || []).map((i: any) => i.id)
+      let precosData: any[] = []
+      if (porteItemIds.length > 0) {
+        const { data } = await supabase
+          .from('catalogo_porte_precos')
+          .select('item_id, porte, preco')
+          .in('item_id', porteItemIds)
+        precosData = data || []
+      }
+
+      const porteItensMontados: PorteItem[] = (porteItensData || []).map((i: any) => ({
+        ...i,
+        precos: precosData.filter(p => p.item_id === i.id),
+      }))
+
+      const { data: tiposTosaData } = await supabase
+        .from('catalogo_tosa_tipos')
+        .select('id, nome, descricao')
+        .eq('tenant_id', tenantData.id)
+
+            const { data: profissionaisData } = await supabase
+        .from('professionals')
+        .select('id, nome, cor_agenda')
+        .eq('tenant_id', tenantData.id)
+        .eq('ativo', true)
+        .order('nome')
+
+      const { data: faixasData } = await supabase
+        .from('transport_price_tiers')
+        .select('raio_min_km, raio_max_km, valor_fixo')
+        .eq('tenant_id', tenantData.id)
+        .order('raio_min_km')
+
+      setRacas(racasMontadas)
+      setPorteItens(porteItensMontados)
+      setTiposTosa(tiposTosaData || [])
+      setProfissionais(profissionaisData || [])
+      setFaixasTransporte((faixasData || []).map((f: any) => ({
+        raio_min_km: Number(f.raio_min_km),
+        raio_max_km: Number(f.raio_max_km),
+        valor_fixo: Number(f.valor_fixo),
+      })))
       setCarregando(false)
-      return
     }
 
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('id, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte')
-      .eq('email', user.email)
-      .single()
-
-    if (!tenant) {
-      setCarregando(false)
-      return
-    }
-
-    setTenantId(tenant.id)
-    setTenantTransporte({
-      endereco_lat: tenant.endereco_lat,
-      endereco_lng: tenant.endereco_lng,
-      preco_por_km: tenant.preco_por_km,
-      valor_minimo_transporte: tenant.valor_minimo_transporte,
-    })
-
-    const { data: racasData } = await supabase
-      .from('catalogo_racas')
-      .select('id, nome, imagem_url')
-      .eq('tenant_id', tenant.id)
-      .order('nome')
-
-    const racaIds = (racasData || []).map((r: any) => r.id)
-    let racaItensData: any[] = []
-    if (racaIds.length > 0) {
-            const { data } = await supabase
-        .from('catalogo_raca_itens')
-        .select('id, raca_id, grupo, nome, descricao, preco, tosa_tipo, inclui, duracao_min')
-        .in('raca_id', racaIds)
-      racaItensData = data || []
-    }
-
-    const racasMontadas: Raca[] = (racasData || []).map((r: any) => ({
-      ...r,
-      itens: racaItensData.filter(i => i.raca_id === r.id),
-    }))
-
-        const { data: porteItensData } = await supabase
-      .from('catalogo_porte_itens')
-      .select('id, grupo, nome, descricao, tosa_tipo, inclui, pelagens, duracao_min')
-      .eq('tenant_id', tenant.id)
-      .order('nome')
-
-    const porteItemIds = (porteItensData || []).map((i: any) => i.id)
-    let precosData: any[] = []
-    if (porteItemIds.length > 0) {
-      const { data } = await supabase
-        .from('catalogo_porte_precos')
-        .select('item_id, porte, preco')
-        .in('item_id', porteItemIds)
-      precosData = data || []
-    }
-
-    const porteItensMontados: PorteItem[] = (porteItensData || []).map((i: any) => ({
-      ...i,
-      precos: precosData.filter(p => p.item_id === i.id),
-    }))
-
-    const { data: tiposTosaData } = await supabase
-      .from('catalogo_tosa_tipos')
-      .select('id, nome, descricao')
-      .eq('tenant_id', tenant.id)
-
-    const { data: profissionaisData } = await supabase
-      .from('professionals')
-      .select('id, nome, cor_agenda')
-      .eq('tenant_id', tenant.id)
-      .eq('ativo', true)
-      .order('nome')
-
-    const { data: faixasData } = await supabase
-      .from('transport_price_tiers')
-      .select('raio_min_km, raio_max_km, valor_fixo')
-      .eq('tenant_id', tenant.id)
-      .order('raio_min_km')
-
-    setRacas(racasMontadas)
-    setPorteItens(porteItensMontados)
-    setTiposTosa(tiposTosaData || [])
-    setProfissionais(profissionaisData || [])
-    setFaixasTransporte((faixasData || []).map((f: any) => ({
-      raio_min_km: Number(f.raio_min_km),
-      raio_max_km: Number(f.raio_max_km),
-      valor_fixo: Number(f.valor_fixo),
-    })))
-    setCarregando(false)
-  }
-
-  useEffect(() => { carregarDados() }, [])
+    carregar()
+  }, [slug])
   
   async function buscarClientePorTelefone(telefoneDigitado: string) {
-    setClienteEncontrado(null)
-    setPetSelecionado('')
+    setClienteExistente(null)
+    setPetsDoCliente([])
 
-    if (!tenantId || telefoneDigitado.replace(/\D/g, '').length < 4) {
-      setSugestoes([])
+    if (!tenant || telefoneDigitado.replace(/\D/g, '').length < 4) {
+      setSugestoesClientes([])
       return
     }
 
@@ -246,41 +274,24 @@ export default function NovoAgendamentoPage() {
 
     const { data: clientes } = await supabase
       .from('customers')
-      .select('id, nome, telefone, pets ( id, nome, porte, raca, pelagem )')
-      .eq('tenant_id', tenantId)
+      .select('id, nome, telefone, pets ( id, nome, especie, porte, raca, pelagem )')
+      .eq('tenant_id', tenant.id)
       .ilike('telefone', `%${telefoneDigitado.replace(/\D/g, '')}%`)
       .limit(6)
 
-    setSugestoes((clientes as any) || [])
+    setSugestoesClientes(clientes || [])
     setBuscandoCliente(false)
   }
 
-  function selecionarCliente(cliente: ClienteEncontrado) {
-    setClienteEncontrado(cliente)
+  function selecionarClienteExistente(cliente: any) {
+    setClienteExistente(cliente)
     setNomeCliente(cliente.nome)
-    setTelefone(cliente.telefone)
-    setSugestoes([])
+    setTelefoneCliente(cliente.telefone)
+    setPetsDoCliente(cliente.pets || [])
+    setSugestoesClientes([])
   }
 
-    function selecionarPetExistente(petId: string) {
-    setPetSelecionado(petId)
-    const pet = clienteEncontrado?.pets.find(p => p.id === petId)
-    if (!pet) return
-
-    if (pet.porte) setPortePet(pet.porte as PorteId)
-    if (pet.pelagem) setPelagemPet(pet.pelagem)
-
-    const racaCatalogo = racas.find(r => r.nome.toLowerCase() === (pet.raca || '').toLowerCase())
-    if (racaCatalogo) {
-      setUsarFluxoRaca(true)
-      setRacaSelecionadaCatalogo(racaCatalogo)
-    } else {
-      setUsarFluxoRaca(false)
-      setRacaSelecionadaCatalogo(null)
-    }
-  }
-
-  async function buscarCep(cep: string) {
+    async function buscarCep(cep: string) {
     const cepLimpo = cep.replace(/\D/g, '')
     if (cepLimpo.length !== 8) return
 
@@ -301,8 +312,8 @@ export default function NovoAgendamentoPage() {
     setBuscandoCep(false)
   }
 
-  async function calcularValorTransporteEstruturado() {
-    if (!numeroColeta || !ruaColeta || !cidadeColeta || !ufColeta || !tenantTransporte?.endereco_lat) return
+    async function calcularValorTransporteEstruturado() {
+    if (!tenant || !(tenant as any).endereco_lat || !numeroColeta || !ruaColeta || !cidadeColeta || !ufColeta) return
 
     setCalculandoDistancia(true)
     try {
@@ -317,9 +328,29 @@ export default function NovoAgendamentoPage() {
       const coords = await res.json()
 
       if (coords.lat) {
+        const lat1 = (tenant as any).endereco_lat
+        const lng1 = (tenant as any).endereco_lng
+
+        try {
+          const paramsRota = new URLSearchParams({
+            latOrigem: String(lat1),
+            lngOrigem: String(lng1),
+            latDestino: String(coords.lat),
+            lngDestino: String(coords.lng),
+          })
+          const resRota = await fetch(`/api/calcular-rota?${paramsRota.toString()}`)
+          const dadosRota = await resRota.json()
+
+          if (dadosRota.distanciaKm !== undefined) {
+            setDistanciaKm(dadosRota.distanciaKm)
+            setCalculandoDistancia(false)
+            return
+          }
+        } catch {
+          // se falhar, cai no calculo de linha reta abaixo
+        }
+
         const R = 6371
-        const lat1 = tenantTransporte.endereco_lat
-        const lng1 = tenantTransporte.endereco_lng!
         const dLat = (coords.lat - lat1) * (Math.PI / 180)
         const dLng = (coords.lng - lng1) * (Math.PI / 180)
         const a =
@@ -334,26 +365,46 @@ export default function NovoAgendamentoPage() {
     }
     setCalculandoDistancia(false)
   }
+  
+  function atualizarPetAtual(campo: keyof PetNoAgendamento, valor: any) {
+    setPetAtual(prev => ({ ...prev, [campo]: valor }))
+  }
 
-  function calcularValorTransporteFinal(): number {
-    if (!precisaTransporte || distanciaKm === null) return 0
+    function selecionarPetExistente(petId: string) {
+    const pet = petsDoCliente.find(p => p.id === petId)
+    if (!pet) return
 
-    const faixaCorrespondente = faixasTransporte.find(
-      f => distanciaKm >= f.raio_min_km && distanciaKm <= f.raio_max_km
-    )
+    const racaCatalogo = racas.find(r => r.nome.toLowerCase() === (pet.raca || '').toLowerCase())
 
-    let bruto: number
-    if (faixaCorrespondente) {
-      bruto = faixaCorrespondente.valor_fixo * (transporteIdaVolta ? 2 : 1)
-    } else if (tenantTransporte?.preco_por_km) {
-      const valorPorTrecho = Math.max(distanciaKm * Number(tenantTransporte.preco_por_km), Number(tenantTransporte.valor_minimo_transporte || 0))
-      bruto = valorPorTrecho * (transporteIdaVolta ? 2 : 1)
-    } else {
-      return 0
-    }
+    setPetAtual({
+      chave: Math.random().toString(36).slice(2),
+      nome: pet.nome,
+      especie: pet.especie || 'cachorro',
+      petIdExistente: pet.id,
+      porte: pet.porte || 'medio',
+      pelagem: pet.pelagem || 'curta',
+      usarFluxoRaca: racaCatalogo ? true : false,
+      racaSelecionada: racaCatalogo || null,
+      itensSelecionados: new Set(),
+    })
+    setSubPassoPet('servicos')
+  }
 
-    const desconto = parseFloat(descontoTransporte) || 0
-    return Math.max(bruto - desconto, 0)
+  function irParaPerfilComNomeNovo() {
+    if (!petAtual.nome) return
+    setSubPassoPet('perfil')
+  }
+
+  function confirmarPetAtualEAdicionarOutro() {
+    setPetsConfirmados(prev => [...prev, petAtual])
+    setPetAtual(petEmBranco())
+    setSubPassoPet('nome')
+    setBuscaRaca('')
+  }
+
+  function confirmarPetAtualEContinuar() {
+    setPetsConfirmados(prev => [...prev, petAtual])
+    setEtapa(3)
   }
   
   function abrirModalTosa(tosaTipoId: string | null) {
@@ -363,112 +414,82 @@ export default function NovoAgendamentoPage() {
     setModalTosa({ titulo: tipo.nome, texto: tipo.descricao })
   }
 
-  const temItemDoGrupoRaca = (grupo: 'principal' | 'combo') =>
-    (racaSelecionadaCatalogo?.itens || []).some(i => i.grupo === grupo && itensRacaSelecionados.has(i.id))
+  function itensDisponiveisParaPet(pet: PetNoAgendamento): RacaItem[] {
+    if (pet.usarFluxoRaca && pet.racaSelecionada) {
+      return pet.racaSelecionada.itens
+    }
+    if (pet.usarFluxoRaca === false) {
+      return porteItens
+        .filter(item => {
+          const temPreco = item.precos.some(p => p.porte === pet.porte)
+          const pelagemOk = !item.pelagens || item.pelagens.length === 0 || item.pelagens.includes(pet.pelagem)
+          return temPreco && pelagemOk
+        })
+        .map(item => ({
+          id: item.id,
+          raca_id: '',
+          grupo: item.grupo,
+          nome: item.nome,
+          descricao: item.descricao,
+          preco: Number(item.precos.find(p => p.porte === pet.porte)?.preco || 0),
+          tosa_tipo: item.tosa_tipo,
+          duracao_min: item.duracao_min,
+        }))
+    }
+    return []
+  }
 
-  function toggleItemRaca(item: RacaItem) {
-    const jaMarcado = itensRacaSelecionados.has(item.id)
-    const novo = new Set(itensRacaSelecionados)
+  function toggleItemPetAtual(item: RacaItem) {
+    const jaMarcado = petAtual.itensSelecionados.has(item.id)
+    const novo = new Set(petAtual.itensSelecionados)
+    const itensDisponiveis = itensDisponiveisParaPet(petAtual)
+
+    const temPrincipal = itensDisponiveis.filter(i => i.grupo === 'principal' && novo.has(i.id)).length > 0
+    const temCombo = itensDisponiveis.filter(i => i.grupo === 'combo' && novo.has(i.id)).length > 0
 
     if (jaMarcado) {
       novo.delete(item.id)
     } else {
-      if (item.grupo === 'principal' && temItemDoGrupoRaca('combo')) {
+      if (item.grupo === 'principal' && temCombo) {
         alert('Ja existe um Combo selecionado. Remova-o para escolher um servico avulso.')
         return
       }
-      if (item.grupo === 'combo' && temItemDoGrupoRaca('principal')) {
+      if (item.grupo === 'combo' && temPrincipal) {
         alert('Ja existe um servico de Banho e Tosa selecionado. Remova-o para escolher um Combo.')
         return
       }
-            novo.add(item.id)
-      if (item.grupo === 'combo') {
-        setModalCombo({ titulo: item.nome, itens: item.inclui || [] })
-      } else {
-        abrirModalTosa(item.tosa_tipo)
-      }
+      novo.add(item.id)
+      abrirModalTosa(item.tosa_tipo)
     }
-    setItensRacaSelecionados(novo)
+    atualizarPetAtual('itensSelecionados', novo)
   }
 
-  const bloqueioRaca = {
-    principal: temItemDoGrupoRaca('combo'),
-    combo: temItemDoGrupoRaca('principal'),
-  }
-
-  const resumoRaca = useMemo(() => {
-    const selecionados = (racaSelecionadaCatalogo?.itens || []).filter(i => itensRacaSelecionados.has(i.id))
+  function resumoPet(pet: PetNoAgendamento) {
+    const itensDisponiveis = itensDisponiveisParaPet(pet)
+    const selecionados = itensDisponiveis.filter(i => pet.itensSelecionados.has(i.id))
     const total = selecionados.reduce((acc, i) => acc + Number(i.preco), 0)
     const duracao = selecionados.reduce((acc, i) => acc + (i.duracao_min || 20), 0)
     return { selecionados, total, duracao }
-  }, [racaSelecionadaCatalogo, itensRacaSelecionados])
-
-  const itemValidoParaPelagem = (item: PorteItem) =>
-    !item.pelagens || item.pelagens.length === 0 || item.pelagens.includes(pelagemPet)
-
-  const itensPorteDisponiveis = useMemo(() => {
-    return porteItens.filter(item => {
-      const precoParaPorte = item.precos.find(p => p.porte === portePet)
-      return precoParaPorte !== undefined && itemValidoParaPelagem(item)
-    })
-  }, [porteItens, portePet, pelagemPet])
-
-  const temItemDoGrupoPorte = (grupo: 'principal' | 'combo') =>
-    itensPorteDisponiveis.some(i => i.grupo === grupo && itensPorteSelecionados.has(i.id))
-
-  function toggleItemPorte(item: PorteItem) {
-    const jaMarcado = itensPorteSelecionados.has(item.id)
-    const novo = new Set(itensPorteSelecionados)
-
-    if (jaMarcado) {
-      novo.delete(item.id)
-    } else {
-      if (item.grupo === 'principal' && temItemDoGrupoPorte('combo')) {
-        alert('Ja existe um Combo selecionado. Remova-o para escolher um servico avulso.')
-        return
-      }
-      if (item.grupo === 'combo' && temItemDoGrupoPorte('principal')) {
-        alert('Ja existe um servico de Banho e Tosa selecionado. Remova-o para escolher um Combo.')
-        return
-      }
-            novo.add(item.id)
-      if (item.grupo === 'combo') {
-        setModalCombo({ titulo: item.nome, itens: item.inclui || [] })
-      } else {
-        abrirModalTosa(item.tosa_tipo)
-      }
-    }
-    setItensPorteSelecionados(novo)
   }
 
-  const bloqueioPorte = {
-    principal: temItemDoGrupoPorte('combo'),
-    combo: temItemDoGrupoPorte('principal'),
-  }
-
-  const resumoPorte = useMemo(() => {
-    const selecionados = itensPorteDisponiveis.filter(i => itensPorteSelecionados.has(i.id))
-    const total = selecionados.reduce((acc, i) => {
-      const precoItem = i.precos.find(p => p.porte === portePet)
-      return acc + Number(precoItem?.preco || 0)
-    }, 0)
-    const duracao = selecionados.reduce((acc, i) => acc + (i.duracao_min || 20), 0)
-    return { selecionados, total, duracao }
-  }, [itensPorteDisponiveis, itensPorteSelecionados, portePet])
-
-  const resumoFinal = usarFluxoRaca ? resumoRaca : resumoPorte
-  const primeiroItemPrincipal = resumoFinal.selecionados.find(i => i.grupo === 'principal') || resumoFinal.selecionados[0]
+  const resumoGeral = useMemo(() => {
+    const todosSelecionados = petsConfirmados.map(p => resumoPet(p))
+    const total = todosSelecionados.reduce((acc, r) => acc + r.total, 0)
+    const duracao = todosSelecionados.reduce((acc, r) => acc + r.duracao, 0)
+    return { total, duracao }
+  }, [petsConfirmados])
   
-  async function buscarHorarios(dataEscolhida: string, duracaoTotal: number) {
-    if (!tenantId) return
+  async function buscarHorarios(data: string) {
+    if (!tenant) return
     setCarregandoHorarios(true)
-    setHorario('')
+    setHorarioSelecionado('')
 
-    const dataObj = new Date(dataEscolhida + 'T00:00:00')
+    const dataObj = new Date(data + 'T00:00:00')
     const diaSemana = dataObj.getDay()
+    const duracaoTotal = resumoGeral.duracao || 60
 
-    const profissionaisParaChecar = profissionalId
-      ? profissionais.filter(p => p.id === profissionalId)
+    const profissionaisParaChecar = profissionalSelecionado
+      ? [profissionalSelecionado]
       : profissionais
 
     let todosHorarios: string[] = []
@@ -486,15 +507,15 @@ export default function NovoAgendamentoPage() {
       const horariosBase = gerarHorarios(
         disponibilidade.hora_inicio.slice(0, 5),
         disponibilidade.hora_fim.slice(0, 5),
-        duracaoTotal || 60
+        duracaoTotal
       )
 
       const { data: agendamentosExistentes } = await supabase
         .from('appointments')
         .select('inicio')
         .eq('professional_id', prof.id)
-        .gte('inicio', dataEscolhida + 'T00:00:00')
-        .lte('inicio', dataEscolhida + 'T23:59:59')
+        .gte('inicio', data + 'T00:00:00')
+        .lte('inicio', data + 'T23:59:59')
         .neq('status', 'cancelado')
 
       const horariosOcupados = (agendamentosExistentes || []).map(a => {
@@ -511,593 +532,908 @@ export default function NovoAgendamentoPage() {
     setCarregandoHorarios(false)
   }
 
-  function selecionarData(dataEscolhida: string) {
-    setData(dataEscolhida)
-    buscarHorarios(dataEscolhida, resumoFinal.duracao || 60)
+  function selecionarData(data: string) {
+    setDataSelecionada(data)
+    buscarHorarios(data)
+  }
+
+    function calcularValorTransporteFinal(): number {
+    if (!precisaTransporte || distanciaKm === null) return 0
+
+    const faixaCorrespondente = faixasTransporte.find(
+      f => distanciaKm >= f.raio_min_km && distanciaKm <= f.raio_max_km
+    )
+
+    if (faixaCorrespondente) {
+      return faixaCorrespondente.valor_fixo * (transporteIdaVolta ? 2 : 1)
+    }
+
+    if (!tenant?.preco_por_km) return 0
+    const valorPorTrecho = Math.max(distanciaKm * Number(tenant.preco_por_km), Number(tenant.valor_minimo_transporte || 0))
+    return valorPorTrecho * (transporteIdaVolta ? 2 : 1)
   }
   
-  async function salvarAgendamento() {
-    setErro('')
+  async function confirmarAgendamento() {
+    setErroAgendamento('')
 
-    const precisaNomePet = !petSelecionado
-    if (!telefone || !nomeCliente || (precisaNomePet && !nomePetNovo)) {
-      setErro('Preencha telefone, nome do cliente e nome do pet.')
+    if (!nomeCliente || !telefoneCliente) {
+      setErroAgendamento('Preencha seu nome e telefone.')
       return
     }
 
-    if (!data || !horario) {
-      setErro('Escolha data e horario.')
+    if (petsConfirmados.length === 0) {
+      setErroAgendamento('Adicione ao menos um pet.')
       return
     }
 
-    if (resumoFinal.selecionados.length === 0 || !primeiroItemPrincipal) {
-      setErro('Selecione ao menos um servico.')
+        if (!dataSelecionada || !horarioSelecionado) {
+      setErroAgendamento('Escolha data e horario.')
       return
     }
 
     if (precisaTransporte && (!ruaColeta || !numeroColeta || !cidadeColeta || !ufColeta)) {
-      setErro('Preencha rua, numero, cidade e UF do endereco de coleta.')
+      setErroAgendamento('Preencha rua, numero, cidade e UF do endereco de coleta.')
       return
     }
 
-    if (!tenantId) {
-      setErro('Tenant nao encontrado.')
+    if (!tenant) return
+
+    setSalvandoAgendamento(true)
+
+    let profissionalId = profissionalSelecionado?.id
+
+    if (!profissionalId) {
+      const dataObj = new Date(dataSelecionada + 'T00:00:00')
+      const diaSemana = dataObj.getDay()
+
+      for (const prof of profissionais) {
+        const { data: disponibilidade } = await supabase
+          .from('professional_availability')
+          .select('hora_inicio, hora_fim')
+          .eq('professional_id', prof.id)
+          .eq('dia_semana', diaSemana)
+          .maybeSingle()
+
+        if (disponibilidade) {
+          profissionalId = prof.id
+          break
+        }
+      }
+    }
+
+    if (!profissionalId) {
+      setErroAgendamento('Nenhum profissional disponivel para essa data.')
+      setSalvandoAgendamento(false)
       return
     }
 
-    setSalvando(true)
+    const { data: clienteExistenteQuery } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('tenant_id', tenant.id)
+      .eq('telefone', telefoneCliente)
+      .maybeSingle()
 
-    let clienteId = clienteEncontrado?.id
+    let clienteId = clienteExistenteQuery?.id
 
     if (!clienteId) {
       const { data: novoCliente, error: erroCliente } = await supabase
         .from('customers')
-        .insert({ tenant_id: tenantId, nome: nomeCliente, telefone })
+        .insert({ tenant_id: tenant.id, nome: nomeCliente, telefone: telefoneCliente })
         .select('id')
         .single()
 
       if (erroCliente || !novoCliente) {
-        setErro('Erro ao cadastrar cliente: ' + erroCliente?.message)
-        setSalvando(false)
+        setErroAgendamento('Erro ao cadastrar cliente: ' + erroCliente?.message)
+        setSalvandoAgendamento(false)
         return
       }
       clienteId = novoCliente.id
     }
+    
+        const enderecoColetaFinal = precisaTransporte
+      ? `${ruaColeta}, ${numeroColeta}${bairroColeta ? ', ' + bairroColeta : ''}, ${cidadeColeta} - ${ufColeta}`
+      : ''
 
-    let petId = petSelecionado
+    let horarioAcumuladoMs = 0
+    const agendamentosCriadosIds: string[] = []
+    let erroCriacao = ''
+    let primeiroPetNome = ''
 
-    if (!petId) {
-      const { data: novoPet, error: erroPet } = await supabase
-        .from('pets')
+    for (const pet of petsConfirmados) {
+      let petId = pet.petIdExistente
+
+      if (!petId) {
+        const { data: novoPet, error: erroPet } = await supabase
+          .from('pets')
+          .insert({
+            tenant_id: tenant.id,
+            customer_id: clienteId,
+            nome: pet.nome,
+            especie: pet.especie,
+            porte: pet.porte,
+            pelagem: pet.pelagem,
+            raca: pet.usarFluxoRaca ? pet.racaSelecionada?.nome : null,
+          })
+          .select('id')
+          .single()
+
+        if (erroPet || !novoPet) {
+          erroCriacao = 'Erro ao cadastrar pet: ' + erroPet?.message
+          break
+        }
+        petId = novoPet.id
+      }
+
+      if (!primeiroPetNome) primeiroPetNome = pet.nome
+
+      const { selecionados, total, duracao } = resumoPet(pet)
+      const nomesServicos = selecionados.map(i => i.nome).join(' + ')
+      const duracaoMs = (duracao || 60) * 60000
+
+      const inicio = new Date(new Date(`${dataSelecionada}T${horarioSelecionado}:00`).getTime() + horarioAcumuladoMs)
+      const fim = new Date(inicio.getTime() + duracaoMs)
+      horarioAcumuladoMs += duracaoMs
+
+      const { data: agendamentoCriado, error: erroAg } = await supabase
+        .from('appointments')
         .insert({
-          tenant_id: tenantId,
+          tenant_id: tenant.id,
           customer_id: clienteId,
-          nome: nomePetNovo,
-          porte: portePet,
-          pelagem: pelagemPet,
-          raca: usarFluxoRaca ? racaSelecionadaCatalogo?.nome : null,
+          pet_id: petId,
+          professional_id: profissionalId,
+          service_id: selecionados[0]?.id || null,
+          inicio: inicio.toISOString(),
+          fim: fim.toISOString(),
+                    status: 'agendado',
+          origem: 'telefone',
+          preco_cobrado: total,
+          observacoes: nomesServicos,
+          precisa_transporte: precisaTransporte,
+                    endereco_coleta: precisaTransporte ? enderecoColetaFinal : null,
+          endereco_entrega: precisaTransporte ? enderecoColetaFinal : null,
+          is_recorrente: ehRecorrente,
+          frequencia_mensal: ehRecorrente ? frequenciaMensal : null,
+          distancia_km: precisaTransporte ? distanciaKm : null,
+          transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
+          valor_transporte: precisaTransporte && distanciaKm && tenant?.preco_por_km
+            ? Math.max(distanciaKm * Number(tenant.preco_por_km), Number(tenant.valor_minimo_transporte || 0)) * (transporteIdaVolta ? 2 : 1)
+            : 0,
         })
         .select('id')
         .single()
 
-      if (erroPet || !novoPet) {
-        setErro('Erro ao cadastrar pet: ' + erroPet?.message)
-        setSalvando(false)
-        return
+      if (erroAg || !agendamentoCriado) {
+        erroCriacao = erroAg?.message || 'Erro desconhecido'
+        break
       }
-      petId = novoPet.id
+
+      agendamentosCriadosIds.push(agendamentoCriado.id)
     }
 
-    const servico = { duracao_min: resumoFinal.duracao || 60 }
-    const inicio = new Date(`${data}T${horario}:00`)
-    const fim = new Date(inicio.getTime() + servico.duracao_min * 60000)
-
-    let profId = profissionalId
-    if (!profId) {
-      const diaSemana = inicio.getDay()
-      for (const prof of profissionais) {
-        const { data: disp } = await supabase
-          .from('professional_availability')
-          .select('id')
-          .eq('professional_id', prof.id)
-          .eq('dia_semana', diaSemana)
-          .maybeSingle()
-        if (disp) { profId = prof.id; break }
-      }
-    }
-
-    const nomesServicos = resumoFinal.selecionados.map(i => i.nome).join(' + ')
-    const enderecoColetaFinal = precisaTransporte
-      ? `${ruaColeta}, ${numeroColeta}${bairroColeta ? ', ' + bairroColeta : ''}, ${cidadeColeta} - ${ufColeta}`
-      : ''
-    const valorTransporte = calcularValorTransporteFinal()
-
-    const { error: erroAgendamento } = await supabase.from('appointments').insert({
-      tenant_id: tenantId,
-      customer_id: clienteId,
-      pet_id: petId,
-      professional_id: profId || null,
-      service_id: primeiroItemPrincipal.id,
-      inicio: inicio.toISOString(),
-      fim: fim.toISOString(),
-      status: 'agendado',
-      origem: 'telefone',
-      preco_cobrado: resumoFinal.total,
-      observacoes: nomesServicos,
-      precisa_transporte: precisaTransporte,
-      endereco_coleta: precisaTransporte ? enderecoColetaFinal : null,
-      endereco_entrega: precisaTransporte ? enderecoColetaFinal : null,
-      distancia_km: precisaTransporte ? distanciaKm : null,
-      transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
-      valor_transporte: valorTransporte,
-      desconto_transporte: precisaTransporte ? (parseFloat(descontoTransporte) || 0) : 0,
-    })
-
-    if (erroAgendamento) {
-      setErro('Erro ao criar agendamento: ' + erroAgendamento.message)
-      setSalvando(false)
+    if (erroCriacao || agendamentosCriadosIds.length === 0) {
+      setErroAgendamento('Erro ao criar agendamento: ' + erroCriacao)
+      setSalvandoAgendamento(false)
       return
     }
 
-    setSalvando(false)
-    setSucesso(true)
+    fetch('/api/notificar/recebido', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: tenant.id,
+        telefone: telefoneCliente,
+        nomePet: primeiroPetNome,
+        servico: `${petsConfirmados.length} pet(s)`,
+        data: new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR'),
+        horario: horarioSelecionado,
+      }),
+    }).catch(() => {})
+
+    setSalvandoAgendamento(false)
+    setAgendamentoConfirmado(true)
   }
   
-  if (carregando) return <p className="text-sm text-gray-400">Carregando...</p>
-
-  if (sucesso) {
+  if (carregando) {
     return (
-      <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center max-w-md">
-        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-green-600 text-xl">✓</span>
-        </div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Agendamento criado!</h2>
-        <button
-          onClick={() => router.push('/dashboard/agenda')}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors"
-        >
-          Ver agenda
-        </button>
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-400 text-sm">Carregando...</p>
+      </div>
+    )
+  }
+
+  if (naoEncontrado) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-400 text-sm">Pet shop nao encontrado.</p>
       </div>
     )
   }
 
   return (
-    <div className="max-w-lg">
-      <h2 className="text-xl font-semibold text-gray-900 mb-1">Novo agendamento</h2>
-      <p className="text-sm text-gray-500 mb-6">Criado a partir do catalogo digital</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white border-b border-gray-100 py-6 px-4">
+        <div className="max-w-lg mx-auto flex items-center gap-3">
+          {tenant?.logo_url && (
+            <img src={tenant.logo_url} alt={tenant.nome} className="w-12 h-12 rounded-lg object-cover" />
+          )}
+          <div>
+                        <h1 className="text-xl font-semibold text-gray-900">{tenant?.nome}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Novo agendamento interno</p>
+          </div>
+        </div>
+      </div>
 
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
-        <div>
-          <label className="text-sm text-gray-600 mb-1 block">Telefone do cliente</label>
-          <input
-            type="text"
-            value={telefone}
-            onChange={e => {
-              setTelefone(e.target.value)
-              buscarClientePorTelefone(e.target.value)
-            }}
-            placeholder="(35) 99999-9999"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {buscandoCliente && <p className="text-xs text-gray-400 mt-1">Verificando...</p>}
+      <div className="max-w-lg mx-auto px-4 py-6">
+        <div className="flex items-center gap-2 mb-6">
+          {[1, 2, 3, 4].map(n => (
+            <div
+              key={n}
+              className={`h-1.5 flex-1 rounded-full ${
+                n <= etapa ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            />
+          ))}
+        </div>
 
-          {sugestoes.length > 0 && !clienteEncontrado && (
-            <div className="border border-gray-200 rounded-lg mt-1 overflow-hidden">
-              {sugestoes.map(c => (
+        {etapa === 1 && (
+          <div>
+            <h2 className="text-sm font-medium text-gray-900 mb-4">Seus dados</h2>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Seu telefone</label>
+                <input
+                  type="text"
+                  value={telefoneCliente}
+                  onChange={e => {
+                    setTelefoneCliente(e.target.value)
+                    buscarClientePorTelefone(e.target.value)
+                  }}
+                  placeholder="(35) 99999-9999"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {buscandoCliente && <p className="text-xs text-gray-400 mt-1">Verificando...</p>}
+
+                {sugestoesClientes.length > 0 && !clienteExistente && (
+                  <div className="border border-gray-200 rounded-lg mt-1 overflow-hidden">
+                    {sugestoesClientes.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selecionarClienteExistente(c)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                      >
+                        {c.nome} • {c.telefone}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {clienteExistente && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Bem-vindo de volta, {clienteExistente.nome}! 🐾
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Seu nome</label>
+                <input
+                  type="text"
+                  value={nomeCliente}
+                  onChange={e => setNomeCliente(e.target.value)}
+                  placeholder="Maria Silva"
+                  disabled={!!clienteExistente}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+              </div>
+
+              <button
+                onClick={() => setEtapa(2)}
+                disabled={!nomeCliente || !telefoneCliente}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-2"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {etapa === 2 && (
+          <div>
+            <button onClick={() => setEtapa(1)} className="text-xs text-blue-600 mb-4 hover:underline">
+              Voltar
+            </button>
+
+            {petsConfirmados.length > 0 && (
+              <div className="bg-green-50 border border-green-100 rounded-lg p-3 mb-4">
+                <p className="text-xs font-medium text-green-700">
+                  ✅ {petsConfirmados.length} pet{petsConfirmados.length > 1 ? 's' : ''} confirmado{petsConfirmados.length > 1 ? 's' : ''}: {petsConfirmados.map(p => p.nome).join(', ')}
+                </p>
+              </div>
+            )}
+
+                        {subPassoPet === 'nome' && (
+              <div>
+                <h2 className="text-sm font-medium text-gray-900 mb-1">
+                  {petsConfirmados.length === 0 ? `Ola, ${nomeCliente.split(' ')[0]}!` : 'Vamos cadastrar o proximo pet'}
+                </h2>
+
+                {petsConfirmados.length === 0 && clienteExistente && (
+                  <p className="text-xs text-gray-400 mb-4">{telefoneCliente}</p>
+                )}
+
+                {petsDoCliente.filter(p => !petsConfirmados.some(pc => pc.petIdExistente === p.id)).length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-500 mb-1.5">Escolha um pet ja cadastrado</p>
+                    <div className="flex flex-col gap-1.5">
+                      {petsDoCliente
+                        .filter(p => !petsConfirmados.some(pc => pc.petIdExistente === p.id))
+                        .map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => selecionarPetExistente(p.id)}
+                            className="border border-gray-200 rounded-lg px-3 py-3 text-left hover:border-blue-300 hover:bg-blue-50 transition-colors text-sm flex items-center justify-between"
+                          >
+                            <span className="font-medium text-gray-900">{p.nome}</span>
+                            <span className="text-xs text-gray-400">
+                              {p.raca || (p.porte ? PORTES.find(pp => pp.id === p.porte)?.label : '')}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {!mostrarFormNovoPet ? (
+                  <button
+                    onClick={() => setMostrarFormNovoPet(true)}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    + Cadastrar um pet novo
+                  </button>
+                ) : (
+                  <div>
+                    <label className="text-sm text-gray-600 mb-1 block">Nome do novo pet</label>
+                    <input
+                      type="text"
+                      value={petAtual.nome}
+                      onChange={e => atualizarPetAtual('nome', e.target.value)}
+                      placeholder="Nome do pet"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => { irParaPerfilComNomeNovo(); setMostrarFormNovoPet(false) }}
+                      disabled={!petAtual.nome}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Continuar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            
+            {subPassoPet === 'perfil' && (
+              <div>
+                <button onClick={() => setSubPassoPet('nome')} className="text-xs text-blue-600 mb-3 hover:underline block">
+                  ← Voltar
+                </button>
+                <h2 className="text-sm font-medium text-gray-900 mb-4">Sobre o {petAtual.nome}</h2>
+
+                <div className="mb-4">
+                  <label className="text-sm text-gray-600 mb-1 block">Especie</label>
+                  <select
+                    value={petAtual.especie}
+                    onChange={e => atualizarPetAtual('especie', e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="cachorro">Cachorro</option>
+                    <option value="gato">Gato</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+
+                {petAtual.usarFluxoRaca === null && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">O {petAtual.nome} tem raca definida?</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => atualizarPetAtual('usarFluxoRaca', true)}
+                        className="border border-gray-200 rounded-xl p-4 text-center hover:border-blue-300 transition-colors"
+                      >
+                        <div className="text-xl mb-1">🐾</div>
+                        <p className="text-xs font-medium text-gray-900">Raca definida</p>
+                      </button>
+                      <button
+                        onClick={() => { atualizarPetAtual('usarFluxoRaca', false); setSubPassoPet('servicos') }}
+                        className="border border-gray-200 rounded-xl p-4 text-center hover:border-blue-300 transition-colors"
+                      >
+                        <div className="text-xl mb-1">📏</div>
+                        <p className="text-xs font-medium text-gray-900">SRD / Nao sei</p>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {petAtual.usarFluxoRaca === true && !petAtual.racaSelecionada && (
+                  <div>
+                    <button onClick={() => atualizarPetAtual('usarFluxoRaca', null)} className="text-xs text-blue-600 mb-3 hover:underline block">
+                      ← Trocar opcao
+                    </button>
+                    <input
+                      type="text"
+                      value={buscaRaca}
+                      onChange={e => setBuscaRaca(e.target.value)}
+                      placeholder="Buscar raca..."
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                    <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                      {racas
+                        .filter(r => r.nome.toLowerCase().includes(buscaRaca.toLowerCase()))
+                        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                        .map(r => (
+                          <button
+                            key={r.id}
+                            onClick={() => { atualizarPetAtual('racaSelecionada', r); setBuscaRaca(''); setSubPassoPet('servicos') }}
+                            className="border border-gray-100 rounded-lg px-3 py-2 text-left hover:border-blue-300 hover:bg-blue-50 transition-colors text-sm"
+                          >
+                            {r.nome}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {subPassoPet === 'servicos' && (() => {
+              const itensDisponiveis = itensDisponiveisParaPet(petAtual)
+              const { selecionados, total } = resumoPet(petAtual)
+              const temPrincipalSel = selecionados.some(i => i.grupo === 'principal')
+              const temComboSel = selecionados.some(i => i.grupo === 'combo')
+
+              return (
+                <div>
+                  <button
+                    onClick={() => { atualizarPetAtual('usarFluxoRaca', petAtual.usarFluxoRaca ? null : null); setSubPassoPet('perfil') }}
+                    className="text-xs text-blue-600 mb-3 hover:underline block"
+                  >
+                    ← Voltar
+                  </button>
+                  <h2 className="text-sm font-medium text-gray-900 mb-1">Servicos para {petAtual.nome}</h2>
+                  {petAtual.usarFluxoRaca && petAtual.racaSelecionada && (
+                    <p className="text-xs text-gray-400 mb-4">Raca: {petAtual.racaSelecionada.nome}</p>
+                  )}
+
+                  {petAtual.usarFluxoRaca === false && (
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Porte</p>
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        {PORTES.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => atualizarPetAtual('porte', p.id)}
+                            className={`text-xs py-2 px-2 rounded-lg border transition-colors ${
+                              petAtual.porte === p.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Pelagem</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => atualizarPetAtual('pelagem', 'curta')}
+                          className={`text-xs py-2 rounded-lg border transition-colors ${
+                            petAtual.pelagem === 'curta' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                        >
+                          Curta
+                        </button>
+                        <button
+                          onClick={() => atualizarPetAtual('pelagem', 'longa')}
+                          className={`text-xs py-2 rounded-lg border transition-colors ${
+                            petAtual.pelagem === 'longa' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                        >
+                          Longa
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(['principal', 'adicional', 'combo'] as const).map(grupo => {
+                    const itens = itensDisponiveis.filter(i => i.grupo === grupo)
+                    if (itens.length === 0) return null
+                    const titulo = grupo === 'principal' ? 'Banho e Tosa' : grupo === 'adicional' ? 'Adicionais' : 'Combos'
+                    return (
+                      <div key={grupo} className="mb-4">
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{titulo}</p>
+                        <div className="flex flex-col gap-1.5">
+                          {itens.map(item => {
+                            const checked = petAtual.itensSelecionados.has(item.id)
+                            const disabled = (grupo === 'principal' && temComboSel && !checked) || (grupo === 'combo' && temPrincipalSel && !checked)
+                            return (
+                              <label
+                                key={item.id}
+                                className={`flex items-center justify-between gap-2 border rounded-xl px-4 py-3 ${
+                                  checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                                } ${disabled ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    disabled={disabled}
+                                    onChange={() => toggleItemPetAtual(item)}
+                                    className="w-4 h-4"
+                                  />
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">{item.nome}</p>
+                                    {item.descricao && <p className="text-xs text-gray-400">{item.descricao}</p>}
+                                  </div>
+                                </div>
+                                <p className="text-sm font-medium text-blue-600 whitespace-nowrap">{fmtMoeda(Number(item.preco))}</p>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {itensDisponiveis.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-8">Nenhum servico disponivel.</p>
+                  )}
+
+                  <div className="bg-blue-50 rounded-xl p-3 mt-4">
+                    <p className="text-xs text-blue-700">{selecionados.length} selecionado(s)</p>
+                    <p className="text-sm font-medium text-blue-700">{fmtMoeda(total)}</p>
+                  </div>
+
+                  <button
+                    onClick={() => setSubPassoPet('confirmado')}
+                    disabled={selecionados.length === 0}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-4"
+                  >
+                    Continuar
+                  </button>
+                </div>
+              )
+            })()}
+            
+            {subPassoPet === 'confirmado' && (() => {
+              const { selecionados, total } = resumoPet(petAtual)
+              return (
+                <div>
+                  <div className="bg-green-50 border border-green-100 rounded-xl p-4 mb-4">
+                    <p className="text-sm font-medium text-green-800 mb-1">
+                      ✅ {petAtual.nome} {petAtual.usarFluxoRaca && petAtual.racaSelecionada ? `(${petAtual.racaSelecionada.nome})` : ''}
+                    </p>
+                    <p className="text-xs text-green-700">{selecionados.map(i => i.nome).join(', ')}</p>
+                    <p className="text-sm font-medium text-green-800 mt-1">{fmtMoeda(total)}</p>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={confirmarPetAtualEAdicionarOutro}
+                      className="w-full border border-blue-200 text-blue-600 text-sm py-2.5 rounded-lg hover:bg-blue-50 transition-colors"
+                    >
+                      + Agendar outro pet
+                    </button>
+                    <button
+                      onClick={confirmarPetAtualEContinuar}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors"
+                    >
+                      Continuar
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+        
+        {etapa === 3 && (
+          <div>
+            <button onClick={() => { setSubPassoPet('nome'); setEtapa(2) }} className="text-xs text-blue-600 mb-4 hover:underline">
+              Voltar
+            </button>
+
+            <div className="bg-blue-50 rounded-xl p-3 mb-4">
+              <p className="text-xs text-blue-700">
+                {petsConfirmados.length} pet{petsConfirmados.length > 1 ? 's' : ''}: {petsConfirmados.map(p => p.nome).join(', ')}
+              </p>
+              <p className="text-sm font-medium text-blue-700">{fmtMoeda(resumoGeral.total)}</p>
+            </div>
+
+            <h2 className="text-sm font-medium text-gray-900 mb-4">Escolha o profissional</h2>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => { setProfissionalSelecionado(null); setEtapa(4) }}
+                className="bg-white border border-gray-100 rounded-xl p-4 text-left hover:border-blue-300 transition-colors"
+              >
+                <p className="text-sm font-medium text-gray-900">Qualquer profissional disponivel</p>
+              </button>
+              {profissionais.map(p => (
                 <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => selecionarCliente(c)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                  key={p.id}
+                  onClick={() => { setProfissionalSelecionado(p); setEtapa(4) }}
+                  className="bg-white border border-gray-100 rounded-xl p-4 text-left hover:border-blue-300 transition-colors flex items-center gap-3"
                 >
-                  {c.nome} • {c.telefone}
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
+                    style={{ backgroundColor: p.cor_agenda }}
+                  >
+                    {p.nome.charAt(0).toUpperCase()}
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">{p.nome}</p>
                 </button>
               ))}
             </div>
-          )}
-
-          {clienteEncontrado && (
-            <p className="text-xs text-green-600 mt-1">
-              Cliente encontrado: {clienteEncontrado.nome} 🐾{' '}
-              <button
-                type="button"
-                onClick={() => { setClienteEncontrado(null); setNomeCliente(''); setPetSelecionado('') }}
-                className="underline"
-              >
-                trocar
-              </button>
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label className="text-sm text-gray-600 mb-1 block">Nome do cliente</label>
-          <input
-            type="text"
-            value={nomeCliente}
-            onChange={e => setNomeCliente(e.target.value)}
-            disabled={!!clienteEncontrado}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-          />
-        </div>
+          </div>
+        )}
         
-        {clienteEncontrado && clienteEncontrado.pets.length > 0 && (
+        {etapa === 4 && !agendamentoConfirmado && (
           <div>
-            <label className="text-sm text-gray-600 mb-1 block">Pet</label>
-            <select
-              value={petSelecionado}
-              onChange={e => selecionarPetExistente(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Cadastrar novo pet</option>
-              {clienteEncontrado.pets.map(p => (
-                <option key={p.id} value={p.id}>{p.nome}</option>
-              ))}
-            </select>
-          </div>
-        )}
+            <button onClick={() => setEtapa(3)} className="text-xs text-blue-600 mb-4 hover:underline">
+              Voltar
+            </button>
+            <h2 className="text-sm font-medium text-gray-900 mb-4">Escolha a data</h2>
 
-        {!petSelecionado && (
-          <div>
-            <label className="text-sm text-gray-600 mb-1 block">Nome do pet</label>
             <input
-              type="text"
-              value={nomePetNovo}
-              onChange={e => setNomePetNovo(e.target.value)}
-              placeholder="Rex"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="date"
+              value={dataSelecionada}
+              min={formatarDataISO(new Date())}
+              onChange={e => selecionarData(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+
+            {dataSelecionada && (
+              <>
+                <h2 className="text-sm font-medium text-gray-900 mb-4">Escolha o horario</h2>
+                {carregandoHorarios ? (
+                  <p className="text-sm text-gray-400">Buscando horarios...</p>
+                ) : horariosDisponiveis.length === 0 ? (
+                  <p className="text-sm text-gray-400">Nenhum horario disponivel nesta data.</p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 mb-6">
+                    {horariosDisponiveis.map(h => (
+                      <button
+                        key={h}
+                        onClick={() => setHorarioSelecionado(h)}
+                        className={`border rounded-lg py-2 text-sm transition-colors ${
+                          horarioSelecionado === h
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                        }`}
+                      >
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {horarioSelecionado && (
+              <>
+                <div className="bg-blue-50 rounded-xl p-3 mb-6">
+                  <p className="text-xs text-blue-700">
+                    {petsConfirmados.length} pet{petsConfirmados.length > 1 ? 's' : ''} • {new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')} as {horarioSelecionado}
+                  </p>
+                  <p className="text-sm font-medium text-blue-700 mt-0.5">
+                    Valor total: {fmtMoeda(resumoGeral.total)}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="border border-gray-200 rounded-lg p-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={precisaTransporte}
+                        onChange={e => setPrecisaTransporte(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm text-gray-700">Preciso de transporte (leva e traz)</span>
+                    </label>
+
+                                        {precisaTransporte && (
+                      <div className="flex flex-col gap-3 mt-3">
+                        <div>
+                          <label className="text-sm text-gray-600 mb-1 block">CEP</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={cepColeta}
+                              onChange={e => setCepColeta(e.target.value)}
+                              onBlur={e => buscarCep(e.target.value)}
+                              placeholder="37700-000"
+                              maxLength={9}
+                              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            {buscandoCep && <span className="text-xs text-gray-400 self-center">Buscando...</span>}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-sm text-gray-600 mb-1 block">Rua *</label>
+                          <input
+                            type="text"
+                            value={ruaColeta}
+                            onChange={e => setRuaColeta(e.target.value)}
+                            placeholder="Rua das Flores"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div className="flex gap-3">
+                          <div className="w-24">
+                            <label className="text-sm text-gray-600 mb-1 block">Numero *</label>
+                            <input
+                              type="text"
+                              value={numeroColeta}
+                              onChange={e => setNumeroColeta(e.target.value)}
+                              onBlur={calcularValorTransporteEstruturado}
+                              placeholder="123"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-sm text-gray-600 mb-1 block">Bairro</label>
+                            <input
+                              type="text"
+                              value={bairroColeta}
+                              onChange={e => setBairroColeta(e.target.value)}
+                              placeholder="Centro"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                          <div className="flex-1">
+                            <label className="text-sm text-gray-600 mb-1 block">Cidade *</label>
+                            <input
+                              type="text"
+                              value={cidadeColeta}
+                              onChange={e => setCidadeColeta(e.target.value)}
+                              placeholder="Pocos de Caldas"
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="w-20">
+                            <label className="text-sm text-gray-600 mb-1 block">UF *</label>
+                            <input
+                              type="text"
+                              value={ufColeta}
+                              onChange={e => setUfColeta(e.target.value.toUpperCase())}
+                              placeholder="MG"
+                              maxLength={2}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        {tenant?.preco_por_km && (
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={transporteIdaVolta}
+                              onChange={e => setTransporteIdaVolta(e.target.checked)}
+                              className="w-4 h-4"
+                            />
+                            <span className="text-xs text-gray-600">Ida e volta (senao, somente ida)</span>
+                          </label>
+                        )}
+
+                        {calculandoDistancia && (
+                          <p className="text-xs text-gray-400">Calculando distancia...</p>
+                        )}
+
+                        {distanciaKm !== null && (
+                          <div className="bg-blue-50 rounded-lg p-2.5">
+                            <p className="text-xs text-blue-700">
+                              Distancia: {distanciaKm.toFixed(1)} km {transporteIdaVolta ? '(ida e volta)' : '(somente ida)'}
+                            </p>
+                            <p className="text-sm font-medium text-blue-700 mt-0.5">
+                              Valor do transporte: {fmtMoeda(calcularValorTransporteFinal())}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border border-gray-200 rounded-lg p-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={ehRecorrente}
+                        onChange={e => setEhRecorrente(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm text-gray-700">Quero agendamento recorrente</span>
+                    </label>
+
+                    {ehRecorrente && (
+                      <div className="mt-3">
+                        <label className="text-sm text-gray-600 mb-1 block">Frequencia</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { freq: 1, label: '1x/mes' },
+                            { freq: 2, label: '2x/mes' },
+                            { freq: 4, label: '4x/mes' },
+                          ].map(opcao => (
+                            <button
+                              key={opcao.freq}
+                              type="button"
+                              onClick={() => setFrequenciaMensal(opcao.freq)}
+                              className={`text-xs py-2 rounded-lg border transition-colors ${
+                                frequenciaMensal === opcao.freq
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-white text-gray-600 border-gray-200'
+                              }`}
+                            >
+                              {opcao.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {erroAgendamento && <p className="text-red-500 text-sm">{erroAgendamento}</p>}
+
+                  <button
+                    onClick={confirmarAgendamento}
+                    disabled={salvandoAgendamento}
+                    style={{ backgroundColor: tenant?.cor_primaria || '#1a56db' }}
+                    className="w-full hover:opacity-90 text-white text-sm py-2.5 rounded-lg transition-opacity disabled:opacity-50 mt-2"
+                  >
+                    {salvandoAgendamento ? 'Confirmando...' : 'Confirmar agendamento'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
-
-                {petSelecionado ? (
-          <div className="bg-blue-50 rounded-lg p-3">
-            <p className="text-xs text-blue-600 font-medium mb-1">Porte e pelagem do pet</p>
-            <p className="text-sm text-blue-800">
-              {PORTES.find(p => p.id === portePet)?.label} • {pelagemPet === 'curta' ? 'Pelagem curta' : 'Pelagem longa'}
+        
+                {agendamentoConfirmado && (
+          <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-green-600 text-xl">✓</span>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Agendamento criado!</h2>
+            <p className="text-sm text-gray-500">
+              {petsConfirmados.map(p => p.nome).join(', ')}
             </p>
-          </div>
-        ) : (
-          <div className="flex gap-3 bg-blue-50 rounded-lg p-3">
-            <div className="flex-1">
-              <label className="text-sm text-gray-700 mb-1 block font-medium">Porte</label>
-              <select
-                value={portePet}
-                onChange={e => setPortePet(e.target.value as PorteId)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {PORTES.map(p => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-1">
-              <label className="text-sm text-gray-700 mb-1 block font-medium">Pelagem</label>
-              <select
-                value={pelagemPet}
-                onChange={e => setPelagemPet(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="curta">Curta</option>
-                <option value="longa">Longa</option>
-              </select>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 mt-4">
-        <h3 className="text-sm font-medium text-gray-900 mb-3">Servicos</h3>
-
-        {usarFluxoRaca === null && (
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setUsarFluxoRaca(true)}
-              className="border border-gray-200 rounded-xl p-4 text-center hover:border-blue-300 transition-colors"
+            <p className="text-sm text-gray-500 mt-1">
+              {new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')} as {horarioSelecionado}
+            </p>
+            {ehRecorrente && (
+              <p className="text-xs text-blue-600 mt-2">
+                Os proximos agendamentos recorrentes tambem foram criados!
+              </p>
+            )}
+             <a           
+              href="/dashboard/agenda"
+              className="inline-block mt-4 text-sm text-blue-600 hover:underline"
             >
-              <div className="text-xl mb-1">🐾</div>
-              <p className="text-xs font-medium text-gray-900">Raca definida</p>
-            </button>
-            <button
-              onClick={() => setUsarFluxoRaca(false)}
-              className="border border-gray-200 rounded-xl p-4 text-center hover:border-blue-300 transition-colors"
-            >
-              <div className="text-xl mb-1">📏</div>
-              <p className="text-xs font-medium text-gray-900">Porte / SRD</p>
-            </button>
-          </div>
-        )}
-
-        {usarFluxoRaca === true && !racaSelecionadaCatalogo && (
-          <div>
-            <button onClick={() => setUsarFluxoRaca(null)} className="text-xs text-blue-600 mb-3 hover:underline block">
-              ← Trocar opcao
-            </button>
-            <input
-              type="text"
-              value={buscaRaca}
-              onChange={e => setBuscaRaca(e.target.value)}
-              placeholder="Buscar raca..."
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
-            <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-              {racas
-                .filter(r => r.nome.toLowerCase().includes(buscaRaca.toLowerCase()))
-                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-                .map(r => (
-                  <button
-                    key={r.id}
-                    onClick={() => { setRacaSelecionadaCatalogo(r); setBuscaRaca('') }}
-                    className="border border-gray-100 rounded-lg px-3 py-2 text-left hover:border-blue-300 hover:bg-blue-50 transition-colors text-sm"
-                  >
-                    {r.nome}
-                  </button>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {usarFluxoRaca === true && racaSelecionadaCatalogo && (
-          <div>
-            <button onClick={() => setRacaSelecionadaCatalogo(null)} className="text-xs text-blue-600 mb-3 hover:underline block">
-              ← Trocar raca ({racaSelecionadaCatalogo.nome})
-            </button>
-            {(['principal', 'adicional', 'combo'] as const).map(grupo => {
-              const itens = racaSelecionadaCatalogo.itens.filter(i => i.grupo === grupo)
-              if (itens.length === 0) return null
-              const titulo = grupo === 'principal' ? 'Banho e Tosa' : grupo === 'adicional' ? 'Adicionais' : 'Combos'
-              return (
-                <div key={grupo} className="mb-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">{titulo}</p>
-                  <div className="flex flex-col gap-1.5">
-                    {itens.map(item => {
-                      const checked = itensRacaSelecionados.has(item.id)
-                      const disabled = (grupo === 'principal' && bloqueioRaca.principal && !checked) || (grupo === 'combo' && bloqueioRaca.combo && !checked)
-                      return (
-                        <label key={item.id} className={`flex items-center justify-between gap-2 border rounded-lg px-3 py-2 ${checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} ${disabled ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}`}>
-                          <span className="flex items-center gap-2">
-                            <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleItemRaca(item)} className="w-4 h-4" />
-                            <span className="text-sm text-gray-900">{item.nome}</span>
-                          </span>
-                          <span className="text-sm font-medium text-blue-600">{fmtMoeda(Number(item.preco))}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {usarFluxoRaca === false && (
-          <div>
-            <button onClick={() => setUsarFluxoRaca(null)} className="text-xs text-blue-600 mb-3 hover:underline block">
-              ← Trocar opcao
-            </button>
-            {(['principal', 'adicional', 'combo'] as const).map(grupo => {
-              const itens = itensPorteDisponiveis.filter(i => i.grupo === grupo)
-              if (itens.length === 0) return null
-              const titulo = grupo === 'principal' ? 'Banho e Tosa' : grupo === 'adicional' ? 'Adicionais' : 'Combos'
-              return (
-                <div key={grupo} className="mb-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">{titulo}</p>
-                  <div className="flex flex-col gap-1.5">
-                    {itens.map(item => {
-                      const checked = itensPorteSelecionados.has(item.id)
-                      const disabled = (grupo === 'principal' && bloqueioPorte.principal && !checked) || (grupo === 'combo' && bloqueioPorte.combo && !checked)
-                      const precoItem = item.precos.find(p => p.porte === portePet)
-                      return (
-                        <label key={item.id} className={`flex items-center justify-between gap-2 border rounded-lg px-3 py-2 ${checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} ${disabled ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}`}>
-                          <span className="flex items-center gap-2">
-                            <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleItemPorte(item)} className="w-4 h-4" />
-                            <span className="text-sm text-gray-900">{item.nome}</span>
-                          </span>
-                          <span className="text-sm font-medium text-blue-600">{fmtMoeda(Number(precoItem?.preco || 0))}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-            {itensPorteDisponiveis.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-6">Nenhum servico disponivel para esse porte/pelagem.</p>
-            )}
-          </div>
-        )}
-
-        {resumoFinal.selecionados.length > 0 && (
-          <div className="bg-blue-50 rounded-lg p-2.5 mt-3">
-            <p className="text-xs text-blue-700">{resumoFinal.selecionados.length} selecionado(s)</p>
-            <p className="text-sm font-medium text-blue-700">{fmtMoeda(resumoFinal.total)}</p>
-          </div>
-        )}
-      </div>
-      
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 mt-4 flex flex-col gap-4">
-        <div>
-          <label className="text-sm text-gray-600 mb-1 block">Profissional</label>
-          <select
-            value={profissionalId}
-            onChange={e => setProfissionalId(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Qualquer profissional disponivel</option>
-            {profissionais.map(p => (
-              <option key={p.id} value={p.id}>{p.nome}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="text-sm text-gray-600 mb-1 block">Data</label>
-          <input
-            type="date"
-            value={data}
-            onChange={e => selecionarData(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {data && resumoFinal.selecionados.length > 0 && (
-          <div>
-            <label className="text-sm text-gray-600 mb-1 block">Horario</label>
-            {carregandoHorarios ? (
-              <p className="text-xs text-gray-400">Buscando horarios...</p>
-            ) : horariosDisponiveis.length === 0 ? (
-              <p className="text-xs text-gray-400">Nenhum horario disponivel.</p>
-            ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {horariosDisponiveis.map(h => (
-                  <button
-                    key={h}
-                    onClick={() => setHorario(h)}
-                    className={`text-sm py-2 rounded-lg border transition-colors ${
-                      horario === h ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
-                    }`}
-                  >
-                    {h}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 mt-4">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={precisaTransporte}
-            onChange={e => setPrecisaTransporte(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span className="text-sm text-gray-700">Precisa de transporte</span>
-        </label>
-
-        {precisaTransporte && (
-          <div className="flex flex-col gap-3 mt-3">
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">CEP</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={cepColeta}
-                  onChange={e => setCepColeta(e.target.value)}
-                  onBlur={e => buscarCep(e.target.value)}
-                  placeholder="37700-000"
-                  maxLength={9}
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {buscandoCep && <span className="text-xs text-gray-400 self-center">Buscando...</span>}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Rua *</label>
-              <input
-                type="text"
-                value={ruaColeta}
-                onChange={e => setRuaColeta(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <div className="w-24">
-                <label className="text-sm text-gray-600 mb-1 block">Numero *</label>
-                <input
-                  type="text"
-                  value={numeroColeta}
-                  onChange={e => setNumeroColeta(e.target.value)}
-                  onBlur={calcularValorTransporteEstruturado}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm text-gray-600 mb-1 block">Bairro</label>
-                <input
-                  type="text"
-                  value={bairroColeta}
-                  onChange={e => setBairroColeta(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-sm text-gray-600 mb-1 block">Cidade *</label>
-                <input
-                  type="text"
-                  value={cidadeColeta}
-                  onChange={e => setCidadeColeta(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="w-20">
-                <label className="text-sm text-gray-600 mb-1 block">UF *</label>
-                <input
-                  type="text"
-                  value={ufColeta}
-                  onChange={e => setUfColeta(e.target.value.toUpperCase())}
-                  maxLength={2}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={transporteIdaVolta}
-                onChange={e => setTransporteIdaVolta(e.target.checked)}
-                className="w-4 h-4"
-              />
-              <span className="text-xs text-gray-600">Ida e volta</span>
-            </label>
-
-            <div>
-              <label className="text-sm text-gray-600 mb-1 block">Desconto no transporte (R$)</label>
-              <input
-                type="number"
-                value={descontoTransporte}
-                onChange={e => setDescontoTransporte(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {calculandoDistancia && <p className="text-xs text-gray-400">Calculando distancia...</p>}
-
-            {distanciaKm !== null && (
-              <div className="bg-blue-50 rounded-lg p-2.5">
-                <p className="text-xs text-blue-700">
-                  Distancia: {distanciaKm.toFixed(1)} km {transporteIdaVolta ? '(ida e volta)' : '(somente ida)'}
-                </p>
-                <p className="text-sm font-medium text-blue-700 mt-0.5">
-                  Valor do transporte: {fmtMoeda(calcularValorTransporteFinal())}
-                </p>
-              </div>
-            )}
+              Ver agenda
+            </a>
           </div>
         )}
       </div>
 
-      {erro && <p className="text-red-500 text-sm mt-3">{erro}</p>}
-
-      <button
-        onClick={salvarAgendamento}
-        disabled={salvando}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-4"
-      >
-        {salvando ? 'Salvando...' : 'Criar agendamento'}
-      </button>
-
-            {modalTosa && (
+      {modalTosa && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center p-5 z-50"
           onClick={e => e.target === e.currentTarget && setModalTosa(null)}
@@ -1108,36 +1444,6 @@ export default function NovoAgendamentoPage() {
             <button
               className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700"
               onClick={() => setModalTosa(null)}
-            >
-              Entendi
-            </button>
-          </div>
-        </div>
-      )}
-
-      {modalCombo && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-5 z-50"
-          onClick={e => e.target === e.currentTarget && setModalCombo(null)}
-        >
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl">
-            <div className="font-bold text-base mb-3 flex items-center gap-2">🎁 {modalCombo.titulo}</div>
-            <p className="text-xs text-gray-400 mb-2 uppercase font-medium">Este combo inclui:</p>
-            {modalCombo.itens.length === 0 ? (
-              <p className="text-sm text-gray-500 mb-5">Combo com desconto especial.</p>
-            ) : (
-              <ul className="flex flex-col gap-1.5 mb-5">
-                {modalCombo.itens.map((item, i) => (
-                  <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                    <span className="text-green-600 flex-shrink-0">✓</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700"
-              onClick={() => setModalCombo(null)}
             >
               Entendi
             </button>
