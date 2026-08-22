@@ -711,13 +711,23 @@ export default function CatalogoAdminPage() {
 
       {(aba === "porte-principal" || aba === "porte-adicional" || aba === "porte-combo") && (
         <div>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 flex gap-3">
-            <span className="text-lg">ℹ️</span>
-            <p className="text-sm text-amber-800">
-              Estes cadastros valem para pets <b>sem raça definida (SRD)</b> — o cliente escolhe pelo porte
-              e pela pelagem do pet, em vez de escolher uma raça específica. Cadastre aqui os preços,
-              serviços, adicionais e combos que devem aparecer para esse fluxo do catálogo.
-            </p>
+                              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5">
+            <div className="flex gap-3 mb-3">
+              <span className="text-lg">📖</span>
+              <div>
+                <p className="text-sm font-medium text-blue-900">Como funciona seu catalogo</p>
+                <p className="text-sm text-blue-800 mt-1">
+                  Cadastre seus servicos aqui, e eles aparecerao automaticamente no seu link publico —
+                  pronto pra divulgar nas redes sociais, WhatsApp ou onde quiser. Os clientes escolhem
+                  o que precisam e o pedido ja chega pronto pra voce.
+                </p>
+              </div>
+            </div>
+            <ul className="text-xs text-blue-800 flex flex-col gap-1.5 pl-8">
+              <li><b>Banho e Tosa:</b> o servico principal escolhido pelo cliente (ex: so banho, banho + tosa higienica). So e possivel escolher um por vez.</li>
+              <li><b>Adicionais:</b> extras que complementam qualquer Banho e Tosa escolhido (ex: hidratacao, corte de unha). Podem ser somados livremente.</li>
+              <li><b>Combos:</b> pacotes fechados com desconto especial, que substituem a escolha avulsa de Banho e Tosa (ex: "Banho + Tosa + Hidratacao por R$ 90").</li>
+            </ul>
           </div>
           {porteItens
             .filter((i) => i.grupo === (aba === "porte-principal" ? "principal" : aba === "porte-adicional" ? "adicional" : "combo"))

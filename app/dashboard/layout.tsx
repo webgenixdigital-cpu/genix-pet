@@ -31,11 +31,12 @@ export default function DashboardLayout({
   const [boasVindasAberto, setBoasVindasAberto] = useState(false)
   const [passoAtual, setPassoAtual] = useState(0)
   const [posicaoSpotlight, setPosicaoSpotlight] = useState({ top: 0, left: 0, width: 0, height: 0 })
-    const [permissoes, setPermissoes] = useState({
+      const [permissoes, setPermissoes] = useState({
     tem_whatsapp: true,
     tem_catalogo_produtos: true,
     tem_modulo_financeiro: true,
     tem_relatorio_fiscal: true,
+    apenas_catalogo: false,
   })
 
   useEffect(() => {
@@ -49,31 +50,37 @@ export default function DashboardLayout({
         .eq('email', user.email)
         .single()
 
-            if (tenant?.status === 'trial') {
+                  if (tenant?.status === 'trial') {
         setPermissoes({
           tem_whatsapp: true,
           tem_catalogo_produtos: true,
           tem_modulo_financeiro: true,
           tem_relatorio_fiscal: true,
+          apenas_catalogo: false,
         })
         return
       }
 
       if (!tenant?.plan_id) return
 
-      const { data: plano } = await supabase
+            const { data: plano } = await supabase
         .from('plans')
-        .select('tem_whatsapp, tem_catalogo_produtos, tem_modulo_financeiro, tem_relatorio_fiscal')
+        .select('tem_whatsapp, tem_catalogo_produtos, tem_modulo_financeiro, tem_relatorio_fiscal, apenas_catalogo')
         .eq('id', tenant.plan_id)
         .single()
 
-      if (plano) {
+            if (plano) {
         setPermissoes({
           tem_whatsapp: plano.tem_whatsapp,
           tem_catalogo_produtos: plano.tem_catalogo_produtos,
           tem_modulo_financeiro: plano.tem_modulo_financeiro,
           tem_relatorio_fiscal: plano.tem_relatorio_fiscal,
+          apenas_catalogo: plano.apenas_catalogo || false,
         })
+
+        if (plano.apenas_catalogo && pathname === '/dashboard') {
+          router.push('/dashboard/catalogo')
+        }
       }
     }
 
@@ -158,21 +165,26 @@ export default function DashboardLayout({
     router.push('/login')
   }
 
-    const menu = [
-    { id: 'inicio', href: '/dashboard', label: 'Início', icon: '🏠', liberado: true },
-    { id: 'agenda', href: '/dashboard/agenda', label: 'Agenda', icon: '📅', liberado: true },
-    { id: 'profissionais', href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️', liberado: true },
-    { id: 'catalogo', href: '/dashboard/catalogo', label: 'Catalogo', icon: '📖', liberado: true },
-    { id: 'produtos', href: '/dashboard/produtos', label: 'Produtos', icon: '📦', liberado: true },
-    { id: 'pacotes', href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁', liberado: true },
-    { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes', icon: '👥', liberado: true },
-    { id: 'financeiro', href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰', liberado: true },
-    { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa', icon: '💵', liberado: true },
-    { id: 'relatorio-fiscal', href: '/dashboard/relatorio-fiscal', label: 'Relatorio Fiscal', icon: '📄', liberado: permissoes.tem_relatorio_fiscal },
-    { id: 'configuracoes', href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️', liberado: true },
-    { id: 'suporte', href: '/dashboard/suporte', label: 'Suporte', icon: '🎧', liberado: true },
-  ]
-
+      const menu = permissoes.apenas_catalogo
+    ? [
+        { id: 'catalogo', href: '/dashboard/catalogo', label: 'Catalogo', icon: '📖', liberado: true },
+        { id: 'configuracoes', href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️', liberado: true },
+        { id: 'suporte', href: '/dashboard/suporte', label: 'Suporte', icon: '🎧', liberado: true },
+      ]
+    : [
+        { id: 'inicio', href: '/dashboard', label: 'Início', icon: '🏠', liberado: true },
+        { id: 'agenda', href: '/dashboard/agenda', label: 'Agenda', icon: '📅', liberado: true },
+        { id: 'profissionais', href: '/dashboard/profissionais', label: 'Profissionais', icon: '✂️', liberado: true },
+        { id: 'catalogo', href: '/dashboard/catalogo', label: 'Catalogo', icon: '📖', liberado: true },
+        { id: 'produtos', href: '/dashboard/produtos', label: 'Produtos', icon: '📦', liberado: true },
+        { id: 'pacotes', href: '/dashboard/pacotes', label: 'Pacotes', icon: '🎁', liberado: true },
+        { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes', icon: '👥', liberado: true },
+        { id: 'financeiro', href: '/dashboard/financeiro', label: 'Financeiro', icon: '💰', liberado: true },
+        { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa', icon: '💵', liberado: true },
+        { id: 'relatorio-fiscal', href: '/dashboard/relatorio-fiscal', label: 'Relatorio Fiscal', icon: '📄', liberado: permissoes.tem_relatorio_fiscal },
+        { id: 'configuracoes', href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙️', liberado: true },
+        { id: 'suporte', href: '/dashboard/suporte', label: 'Suporte', icon: '🎧', liberado: true },
+      ]
   return (
     <div className="min-h-screen flex bg-gray-50">
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-100 z-40 flex items-center justify-between px-4 py-3">
@@ -249,7 +261,23 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      <main className="flex-1 p-4 md:p-8 overflow-auto mt-14 md:mt-0">
+            <main className="flex-1 p-4 md:p-8 overflow-auto mt-14 md:mt-0">
+        {permissoes.apenas_catalogo && (
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-5 mb-6 text-white flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-sm font-semibold">🚀 Experimente 14 dias grátis do sistema Genix Pet!</p>
+              <p className="text-xs text-blue-100 mt-0.5">
+                Gerencie seu pet shop completo — agenda, financeiro, clientes — junto com seu catálogo digital.
+              </p>
+            </div>
+            <a
+              href="/dashboard/configuracoes"
+              className="bg-white text-blue-700 text-xs font-medium px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap"
+            >
+              Fazer upgrade
+            </a>
+          </div>
+        )}
         {children}
       </main>
 

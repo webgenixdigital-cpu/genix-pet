@@ -96,7 +96,8 @@ function ConfiguracoesConteudo() {
   const [zapiToken, setZapiToken] = useState('')
   const [whatsappConectado, setWhatsappConectado] = useState(false)
   const [salvandoWhatsapp, setSalvandoWhatsapp] = useState(false)
-  const [temWhatsappNoPlano, setTemWhatsappNoPlano] = useState(true)
+    const [temWhatsappNoPlano, setTemWhatsappNoPlano] = useState(true)
+  const [apenasCatalogo, setApenasCatalogo] = useState(false)
 
   const supabase = createClient()
 
@@ -120,14 +121,15 @@ function ConfiguracoesConteudo() {
         setPrecoPorKm(data.preco_por_km?.toString() || '')
         setValorMinimoTransporte(data.valor_minimo_transporte?.toString() || '5.00')
 
-        if (data.plan_id) {
+                if (data.plan_id) {
           const { data: plano } = await supabase
             .from('plans')
-            .select('tem_whatsapp')
+            .select('tem_whatsapp, apenas_catalogo')
             .eq('id', data.plan_id)
             .single()
 
           setTemWhatsappNoPlano(plano?.tem_whatsapp ?? true)
+          setApenasCatalogo(plano?.apenas_catalogo ?? false)
         }
 
         const { data: faixas } = await supabase
@@ -434,6 +436,7 @@ function ConfiguracoesConteudo() {
         </div>
       </SecaoRetravel>
 
+            {!apenasCatalogo && (
       <SecaoRetravel
         titulo="Transporte por distancia"
         resumo="Endereco base, preco por km e faixas fixas"
@@ -590,8 +593,10 @@ function ConfiguracoesConteudo() {
             </button>
           </div>
         </div>
-      </SecaoRetravel>
+            </SecaoRetravel>
+      )}
 
+      {!apenasCatalogo && (
       <SecaoRetravel
         titulo="WhatsApp"
         resumo={whatsappConectado ? 'Conectado' : 'Nao conectado'}
@@ -646,8 +651,10 @@ function ConfiguracoesConteudo() {
             {salvandoWhatsapp ? 'Salvando...' : 'Salvar e conectar'}
           </button>
         </div>
-      </SecaoRetravel>
+            </SecaoRetravel>
+      )}
 
+      {!apenasCatalogo && (
       <SecaoRetravel
         titulo="Personalizacao de marca"
         resumo="Logo e cor do seu pet shop"
@@ -688,7 +695,8 @@ function ConfiguracoesConteudo() {
             {salvandoMarca ? 'Salvando...' : 'Salvar marca'}
           </button>
         </div>
-      </SecaoRetravel>
+            </SecaoRetravel>
+      )}
     </div>
   )
 }
