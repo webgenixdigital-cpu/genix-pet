@@ -15,20 +15,21 @@ type Agendamento = {
   customer_id: string
   service_id: string
   pet_id: string
-      observacoes: string | null
+        observacoes: string | null
   notas_internas: string | null
   pago: boolean
+  is_recorrente: boolean
   customers: { nome: string; telefone: string } | null
   pets: { nome: string } | null
   professionals: { nome: string; cor_agenda: string } | null
 }
 
 const COLUNAS = [
-  { status: 'em_espera', label: 'Aguardando aprovacao', cor: 'bg-yellow-100' },
-  { status: 'agendado', label: 'Agendado', cor: 'bg-gray-100' },
-  { status: 'confirmado', label: 'Confirmado', cor: 'bg-blue-100' },
-  { status: 'em_atendimento', label: 'Em atendimento', cor: 'bg-purple-100' },
-  { status: 'concluido', label: 'Concluido', cor: 'bg-green-100' },
+  { status: 'em_espera', label: 'Aguardando aprovacao', cor: 'bg-yellow-100', borda: 'border-yellow-400', destaque: true },
+  { status: 'agendado', label: 'Agendado', cor: 'bg-gray-100', borda: 'border-gray-300', destaque: false },
+  { status: 'confirmado', label: 'Confirmado', cor: 'bg-blue-100', borda: 'border-blue-400', destaque: false },
+  { status: 'em_atendimento', label: 'Em atendimento', cor: 'bg-purple-100', borda: 'border-purple-400', destaque: false },
+  { status: 'concluido', label: 'Concluido', cor: 'bg-green-100', borda: 'border-green-400', destaque: false },
 ]
 
 const PROXIMO_STATUS: Record<string, string> = {
@@ -120,7 +121,7 @@ export default function AgendaPage() {
         const { data } = await supabase
       .from('appointments')
       .select(`
-                        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago,
+                                id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago, is_recorrente,
         customers ( nome, telefone ),
         pets ( nome ),
         professionals ( nome, cor_agenda )
@@ -687,21 +688,24 @@ function enviarLembreteRapido(a: Agendamento) {
                     <p className="text-xs text-gray-300 text-center py-6">Vazio</p>
                   )}
 
-                  {itens.map(a => (
+                                    {itens.map(a => (
                     <button
                       key={a.id}
                       onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
-                      className="bg-white border border-gray-100 rounded-xl p-3 text-left hover:border-blue-300 hover:shadow-sm transition-all w-full"
+                      className={`bg-white rounded-xl p-3 text-left hover:shadow-sm transition-all w-full border-l-4 ${
+                        a.is_recorrente ? 'border-purple-500' : coluna.borda
+                      } ${coluna.destaque ? 'ring-1 ring-yellow-300 shadow-sm' : 'border-t border-r border-b border-gray-100'}`}
                     >
                                             <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-900">
                           {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                                                <div className="flex items-center gap-1.5">
+                                                                        <div className="flex items-center gap-1.5">
                           {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
                           {!a.pago && Number(a.preco_cobrado || 0) > 0 && (
                             <span className="text-xs" title="Pagamento pendente">💰</span>
                           )}
+                          {a.is_recorrente && <span className="text-xs" title="Faz parte de um plano recorrente">🔁</span>}
                           {a.precisa_transporte && <span className="text-xs">🚐</span>}
                           {pacotesPorPet[a.pet_id] && (
                             <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
