@@ -52,6 +52,22 @@ type PorteItem = {
 type TipoTosa = { id: string; nome: string; descricao: string }
 type Profissional = { id: string; nome: string; cor_agenda: string }
 
+type Plano = {
+  id: string
+  nome: string
+  raca_id: string | null
+  porte: string | null
+  pelagem: string | null
+  quantidade_banhos: number
+  validade_dias: number
+  preco_base: number
+  preco_final: number
+  tipo_recorrencia: 'intervalo' | 'mensal_dia_semana'
+  intervalo_dias: number | null
+  semana_do_mes: number | null
+  dia_semana: number | null
+}
+
 type PetNoAgendamento = {
   chave: string
   nome: string
@@ -62,6 +78,8 @@ type PetNoAgendamento = {
   usarFluxoRaca: boolean | null
   racaSelecionada: Raca | null
   itensSelecionados: Set<string>
+  planoEscolhido: Plano | null
+  planoAtivarAgora: boolean
 }
 
 function petEmBranco(): PetNoAgendamento {
@@ -70,6 +88,7 @@ function petEmBranco(): PetNoAgendamento {
     nome: '', especie: 'cachorro', petIdExistente: null,
     porte: 'medio', pelagem: 'curta',
     usarFluxoRaca: null, racaSelecionada: null, itensSelecionados: new Set(),
+    planoEscolhido: null, planoAtivarAgora: true,
   }
 }
 
@@ -108,8 +127,17 @@ function fmtMoeda(v: number): string {
   return `R$ ${v.toFixed(2).replace('.', ',')}`
 }
 
+function nEsimoDiaDaSemanaDoMes(ano: number, mes: number, diaSemana: number, n: number): Date {
+  const primeiroDia = new Date(ano, mes, 1)
+  const primeiroDiaSemana = primeiroDia.getDay()
+  const deslocamento = (diaSemana - primeiroDiaSemana + 7) % 7
+  const dia = 1 + deslocamento + (n - 1) * 7
+  return new Date(ano, mes, dia)
+}
+
 export default function AgendarPage() {
   const params = useParams()
+  
   const slug = params.slug as string
   const supabase = createClient()
 
@@ -117,7 +145,8 @@ export default function AgendarPage() {
   const [racas, setRacas] = useState<Raca[]>([])
   const [porteItens, setPorteItens] = useState<PorteItem[]>([])
   const [tiposTosa, setTiposTosa] = useState<TipoTosa[]>([])
-  const [profissionais, setProfissionais] = useState<Profissional[]>([])
+    const [profissionais, setProfissionais] = useState<Profissional[]>([])
+  const [planos, setPlanos] = useState<Plano[]>([])
   const [carregando, setCarregando] = useState(true)
   const [naoEncontrado, setNaoEncontrado] = useState(false)
 
@@ -135,7 +164,7 @@ export default function AgendarPage() {
   // Arquitetura nova: um pet "em construcao" por vez, e uma lista dos ja confirmados
   const [petAtual, setPetAtual] = useState<PetNoAgendamento>(petEmBranco())
   const [petsConfirmados, setPetsConfirmados] = useState<PetNoAgendamento[]>([])
-    const [subPassoPet, setSubPassoPet] = useState<'nome' | 'perfil' | 'servicos' | 'confirmado'>('nome')
+     const [subPassoPet, setSubPassoPet] = useState<'nome' | 'perfil' | 'servicos' | 'plano' | 'confirmado'>('nome')
   const [mostrarFormNovoPet, setMostrarFormNovoPet] = useState(false)
 
   const [profissionalSelecionado, setProfissionalSelecionado] = useState<Profissional | null>(null)
@@ -251,11 +280,17 @@ export default function AgendarPage() {
         .eq('ativo', true)
         .order('nome')
 
-      const { data: faixasData } = await supabase
+            const { data: faixasData } = await supabase
         .from('transport_price_tiers')
         .select('raio_min_km, raio_max_km, valor_fixo')
         .eq('tenant_id', tenantData.id)
         .order('raio_min_km')
+
+      const { data: planosData } = await supabase
+        .from('pacote_config_desconto')
+        .select('*')
+        .eq('tenant_id', tenantData.id)
+        .eq('ativo', true)
 
       setRacas(racasMontadas)
       setPorteItens(porteItensMontados)
@@ -266,6 +301,7 @@ export default function AgendarPage() {
         raio_max_km: Number(f.raio_max_km),
         valor_fixo: Number(f.valor_fixo),
       })))
+      setPlanos(planosData || [])
       setCarregando(false)
     }
 
@@ -387,7 +423,7 @@ export default function AgendarPage() {
 
     const racaCatalogo = racas.find(r => r.nome.toLowerCase() === (pet.raca || '').toLowerCase())
 
-    setPetAtual({
+            setPetAtual({
       chave: Math.random().toString(36).slice(2),
       nome: pet.nome,
       especie: pet.especie || 'cachorro',
@@ -397,6 +433,8 @@ export default function AgendarPage() {
       usarFluxoRaca: racaCatalogo ? true : false,
       racaSelecionada: racaCatalogo || null,
       itensSelecionados: new Set(),
+      planoEscolhido: null,
+      planoAtivarAgora: true,
     })
     setSubPassoPet('servicos')
   }
@@ -406,7 +444,7 @@ export default function AgendarPage() {
     setSubPassoPet('perfil')
   }
 
-  function confirmarPetAtualEAdicionarOutro() {
+    function confirmarPetAtualEAdicionarOutro() {
     setPetsConfirmados(prev => [...prev, petAtual])
     setPetAtual(petEmBranco())
     setSubPassoPet('nome')
@@ -416,6 +454,21 @@ export default function AgendarPage() {
   function confirmarPetAtualEContinuar() {
     setPetsConfirmados(prev => [...prev, petAtual])
     setEtapa(3)
+  }
+
+  function planosCompativeisComPet(pet: PetNoAgendamento): Plano[] {
+    if (pet.usarFluxoRaca && pet.racaSelecionada) {
+      return planos.filter(p => p.raca_id === pet.racaSelecionada!.id)
+    }
+    if (pet.usarFluxoRaca === false) {
+      return planos.filter(p => p.porte === pet.porte && p.pelagem === pet.pelagem)
+    }
+    return []
+  }
+
+    function escolherPlano(plano: Plano | null) {
+    atualizarPetAtual('planoEscolhido', plano)
+    atualizarPetAtual('planoAtivarAgora', true)
   }
   
   function abrirModalTosa(tosaTipoId: string | null) {
@@ -700,11 +753,10 @@ export default function AgendarPage() {
           origem: 'online',
           preco_cobrado: total,
           observacoes: nomesServicos,
-          precisa_transporte: precisaTransporte,
-                    endereco_coleta: precisaTransporte ? enderecoColetaFinal : null,
+                    precisa_transporte: precisaTransporte,
+          endereco_coleta: precisaTransporte ? enderecoColetaFinal : null,
           endereco_entrega: precisaTransporte ? enderecoColetaFinal : null,
-          is_recorrente: ehRecorrente,
-          frequencia_mensal: ehRecorrente ? frequenciaMensal : null,
+          is_recorrente: !!pet.planoEscolhido,
           distancia_km: precisaTransporte ? distanciaKm : null,
           transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
           valor_transporte: precisaTransporte && distanciaKm && tenant?.preco_por_km
@@ -720,6 +772,70 @@ export default function AgendarPage() {
       }
 
       agendamentosCriadosIds.push(agendamentoCriado.id)
+
+            if (pet.planoEscolhido) {
+        const plano = pet.planoEscolhido
+        const ativarAgora = pet.planoAtivarAgora
+        const expiraEm = new Date(inicio)
+        expiraEm.setDate(expiraEm.getDate() + plano.validade_dias)
+
+        await supabase.from('customer_packages').insert({
+          tenant_id: tenant.id,
+          customer_id: clienteId,
+          pet_id: petId,
+          pacote_config_id: plano.id,
+          sessoes_total: plano.quantidade_banhos,
+          sessoes_usadas: ativarAgora ? 1 : 0,
+          preco_pago: plano.preco_final,
+          expira_em: expiraEm.toISOString(),
+          status: 'ativo',
+        })
+
+        // Se ativar agora: o agendamento de hoje conta como sessao 1, faltam (quantidade-1) futuras
+        // Se nao ativar agora: hoje fica avulso (fora do plano), e todas as (quantidade) sessoes comecam a partir da proxima data
+        const totalFuturos = ativarAgora ? plano.quantidade_banhos - 1 : plano.quantidade_banhos
+        const inicioContagem = ativarAgora ? 0 : 1
+        const futuros = []
+
+        for (let i = inicioContagem === 0 ? 1 : 0; i < inicioContagem + totalFuturos; i++) {
+          const offset = ativarAgora ? i : i + 1
+          let proximoInicio: Date
+
+          if (plano.tipo_recorrencia === 'intervalo' && plano.intervalo_dias) {
+            proximoInicio = new Date(inicio.getTime() + plano.intervalo_dias * offset * 24 * 60 * 60 * 1000)
+          } else if (plano.semana_do_mes !== null && plano.dia_semana !== null) {
+            const dataBase = new Date(inicio)
+            const mesAlvo = dataBase.getMonth() + offset
+            const diaCalculado = nEsimoDiaDaSemanaDoMes(dataBase.getFullYear(), mesAlvo, plano.dia_semana, plano.semana_do_mes)
+            proximoInicio = new Date(diaCalculado)
+            proximoInicio.setHours(inicio.getHours(), inicio.getMinutes())
+          } else {
+            continue
+          }
+
+          const proximoFim = new Date(proximoInicio.getTime() + duracaoMs)
+
+          futuros.push({
+            tenant_id: tenant.id,
+            customer_id: clienteId,
+            pet_id: petId,
+            professional_id: profissionalId,
+            service_id: selecionados[0]?.id || null,
+            inicio: proximoInicio.toISOString(),
+            fim: proximoFim.toISOString(),
+            status: 'em_espera',
+            origem: 'online',
+            preco_cobrado: ativarAgora ? 0 : (offset === 1 ? plano.preco_final : 0),
+            observacoes: `${nomesServicos} (plano ${plano.nome})`,
+            is_recorrente: true,
+            recorrencia_pai_id: agendamentoCriado.id,
+          })
+        }
+
+        if (futuros.length > 0) {
+          await supabase.from('appointments').insert(futuros)
+        }
+      }
     }
 
     if (erroCriacao || agendamentosCriadosIds.length === 0) {
@@ -1108,8 +1224,8 @@ export default function AgendarPage() {
                     <p className="text-sm font-medium text-blue-700">{fmtMoeda(total)}</p>
                   </div>
 
-                  <button
-                    onClick={() => setSubPassoPet('confirmado')}
+                                    <button
+                    onClick={() => setSubPassoPet('plano')}
                     disabled={selecionados.length === 0}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-4"
                   >
@@ -1119,16 +1235,113 @@ export default function AgendarPage() {
               )
             })()}
             
+                        {subPassoPet === 'plano' && (() => {
+              const planosDoPet = planosCompativeisComPet(petAtual)
+              return (
+                <div>
+                  <button onClick={() => setSubPassoPet('servicos')} className="text-xs text-blue-600 mb-3 hover:underline block">
+                    ← Voltar
+                  </button>
+                  <h2 className="text-sm font-medium text-gray-900 mb-1">Quer um plano recorrente?</h2>
+                  <p className="text-xs text-gray-400 mb-4">
+                    Economize com banhos recorrentes para {petAtual.nome}
+                  </p>
+
+                                    {planosDoPet.length === 0 ? (
+                    <div>
+                      <p className="text-sm text-gray-400 text-center py-6">
+                        Nenhum plano disponivel para este pet no momento.
+                      </p>
+                      <button
+                        onClick={() => setSubPassoPet('confirmado')}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors"
+                      >
+                        Continuar sem plano
+                      </button>
+                    </div>
+                  ) : !petAtual.planoEscolhido ? (
+                    <div className="flex flex-col gap-2">
+                      {planosDoPet.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => escolherPlano(p)}
+                          className="border border-gray-200 rounded-xl p-4 text-left hover:border-blue-300 transition-colors"
+                        >
+                          <p className="text-sm font-medium text-gray-900">{p.nome}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {p.quantidade_banhos} banhos • valido {p.validade_dias} dias
+                          </p>
+                          <p className="text-xs text-gray-400 line-through">{fmtMoeda(Number(p.preco_base))}</p>
+                          <p className="text-sm font-semibold text-blue-600">{fmtMoeda(Number(p.preco_final))}</p>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => { escolherPlano(null); setSubPassoPet('confirmado') }}
+                        className="text-xs text-gray-500 hover:underline text-center mt-2"
+                      >
+                        Nao quero plano, so este agendamento
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="bg-blue-50 rounded-xl p-4 mb-4">
+                        <p className="text-sm font-medium text-blue-900">✅ {petAtual.planoEscolhido.nome}</p>
+                        <p className="text-xs text-blue-700 mt-0.5">
+                          {petAtual.planoEscolhido.quantidade_banhos} banhos por {fmtMoeda(Number(petAtual.planoEscolhido.preco_final))}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-2 bg-blue-100 rounded-lg px-2 py-1.5">
+                          💳 O pagamento do plano e sempre feito no 1º banho do ciclo.
+                        </p>
+                      </div>
+
+                      <p className="text-sm text-gray-700 mb-2">
+                        O agendamento de hoje ja e o 1º banho deste plano?
+                      </p>
+
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={() => { atualizarPetAtual('planoAtivarAgora', true); setSubPassoPet('confirmado') }}
+                          className="border border-gray-200 rounded-xl p-3 text-left hover:border-blue-300 transition-colors"
+                        >
+                          <p className="text-sm font-medium text-gray-900">Sim, comecar agora</p>
+                          <p className="text-xs text-gray-400">Este agendamento entra como o 1º banho do plano</p>
+                        </button>
+                        <button
+                          onClick={() => { atualizarPetAtual('planoAtivarAgora', false); setSubPassoPet('confirmado') }}
+                          className="border border-gray-200 rounded-xl p-3 text-left hover:border-blue-300 transition-colors"
+                        >
+                          <p className="text-sm font-medium text-gray-900">Nao, comecar no proximo banho</p>
+                          <p className="text-xs text-gray-400">Este agendamento e cobrado normalmente, o plano comeca depois</p>
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => atualizarPetAtual('planoEscolhido', null)}
+                        className="text-xs text-gray-500 hover:underline mt-3 block"
+                      >
+                        ← Trocar plano
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             {subPassoPet === 'confirmado' && (() => {
               const { selecionados, total } = resumoPet(petAtual)
               return (
                 <div>
-                  <div className="bg-green-50 border border-green-100 rounded-xl p-4 mb-4">
+                                    <div className="bg-green-50 border border-green-100 rounded-xl p-4 mb-4">
                     <p className="text-sm font-medium text-green-800 mb-1">
                       ✅ {petAtual.nome} {petAtual.usarFluxoRaca && petAtual.racaSelecionada ? `(${petAtual.racaSelecionada.nome})` : ''}
                     </p>
                     <p className="text-xs text-green-700">{selecionados.map(i => i.nome).join(', ')}</p>
                     <p className="text-sm font-medium text-green-800 mt-1">{fmtMoeda(total)}</p>
+                    {petAtual.planoEscolhido && (
+                      <p className="text-xs text-blue-700 mt-2 bg-blue-50 rounded-lg px-2 py-1.5">
+                        📅 Plano: {petAtual.planoEscolhido.nome} ({petAtual.planoEscolhido.quantidade_banhos} banhos por {fmtMoeda(Number(petAtual.planoEscolhido.preco_final))})
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-3">
@@ -1363,43 +1576,16 @@ export default function AgendarPage() {
                     )}
                   </div>
 
-                  <div className="border border-gray-200 rounded-lg p-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={ehRecorrente}
-                        onChange={e => setEhRecorrente(e.target.checked)}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-sm text-gray-700">Quero agendamento recorrente</span>
-                    </label>
-
-                    {ehRecorrente && (
-                      <div className="mt-3">
-                        <label className="text-sm text-gray-600 mb-1 block">Frequencia</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {[
-                            { freq: 1, label: '1x/mes' },
-                            { freq: 2, label: '2x/mes' },
-                            { freq: 4, label: '4x/mes' },
-                          ].map(opcao => (
-                            <button
-                              key={opcao.freq}
-                              type="button"
-                              onClick={() => setFrequenciaMensal(opcao.freq)}
-                              className={`text-xs py-2 rounded-lg border transition-colors ${
-                                frequenciaMensal === opcao.freq
-                                  ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'bg-white text-gray-600 border-gray-200'
-                              }`}
-                            >
-                              {opcao.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                                    {petsConfirmados.some(p => p.planoEscolhido) && (
+                    <div className="border border-blue-200 bg-blue-50 rounded-lg p-3">
+                      <p className="text-sm font-medium text-blue-800 mb-1">📅 Planos recorrentes selecionados</p>
+                      {petsConfirmados.filter(p => p.planoEscolhido).map(p => (
+                        <p key={p.chave} className="text-xs text-blue-700">
+                          {p.nome}: {p.planoEscolhido!.nome} ({p.planoEscolhido!.quantidade_banhos} banhos)
+                        </p>
+                      ))}
+                    </div>
+                  )}
 
                   {erroAgendamento && <p className="text-red-500 text-sm">{erroAgendamento}</p>}
 
