@@ -15,8 +15,9 @@ type Agendamento = {
   customer_id: string
   service_id: string
   pet_id: string
-    observacoes: string | null
+      observacoes: string | null
   notas_internas: string | null
+  pago: boolean
   customers: { nome: string; telefone: string } | null
   pets: { nome: string } | null
   professionals: { nome: string; cor_agenda: string } | null
@@ -54,7 +55,9 @@ export default function AgendaPage() {
   const [periodoFiltro, setPeriodoFiltro] = useState<'dia' | 'semana' | 'mes'>('dia')
   const [offsetCalendario, setOffsetCalendario] = useState(0)
     const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
-    const [infoAberto, setInfoAberto] = useState<Agendamento | null>(null)
+      const [infoAberto, setInfoAberto] = useState<Agendamento | null>(null)
+  const [mostrarTransporteModal, setMostrarTransporteModal] = useState(false)
+  const [mostrarObsModal, setMostrarObsModal] = useState(false)
     const [notasInternas, setNotasInternas] = useState('')
   const [salvandoNotas, setSalvandoNotas] = useState(false)
 
@@ -117,7 +120,7 @@ export default function AgendaPage() {
         const { data } = await supabase
       .from('appointments')
       .select(`
-                id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas,
+                        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago,
         customers ( nome, telefone ),
         pets ( nome ),
         professionals ( nome, cor_agenda )
@@ -384,6 +387,26 @@ function enviarLembreteRapido(a: Agendamento) {
     setModalServico(null)
     carregarAgendamentos()
   }
+    async function marcarComoPago(id: string) {
+    await supabase.from('appointments').update({ pago: true }).eq('id', id)
+    setInfoAberto(null)
+    carregarAgendamentos()
+  }
+
+  function enviarFatura(a: Agendamento) {
+    const telefone = (a.customers?.telefone || '').replace(/\D/g, '')
+    if (!telefone) {
+      alert('Cliente sem telefone cadastrado.')
+      return
+    }
+
+    const telefoneComDDI = telefone.startsWith('55') ? telefone : `55${telefone}`
+
+    const mensagem = `Ola, ${a.customers?.nome}! Segue o resumo do atendimento do(a) ${a.pets?.nome}:\n\n${a.observacoes}\n\n💰 Valor total: R$ ${Number(a.preco_cobrado || 0).toFixed(2).replace('.', ',')}\n\nFico no aguardo do pagamento. Qualquer duvida, e so chamar!`
+
+    const link = `https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`
+    window.open(link, '_blank')
+  }
     async function salvarNotasInternas() {
     if (!infoAberto) return
     setSalvandoNotas(true)
@@ -578,8 +601,9 @@ function enviarLembreteRapido(a: Agendamento) {
 
                   {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
-      ) : periodoFiltro === 'semana' ? (
-        <div className="grid grid-cols-7 gap-3">
+            ) : periodoFiltro === 'semana' ? (
+        <div className="overflow-x-auto pb-2">
+          <div className="grid grid-cols-7 gap-3 min-w-[700px]">
           {gerarDiasDaSemana().map(dia => {
             const itens = (agendamentosPorDia[dia] || []).filter(a => a.status !== 'cancelado' && a.status !== 'faltou')
             const dataObj = new Date(dia + 'T00:00:00')
@@ -606,11 +630,12 @@ function enviarLembreteRapido(a: Agendamento) {
                       </p>
                       <p className="text-[11px] text-gray-600 truncate">{a.pets?.nome}</p>
                     </button>
-                  ))}
+                                    ))}
                 </div>
               </div>
             )
           })}
+          </div>
         </div>
       ) : periodoFiltro === 'mes' ? (
         <div>
@@ -645,7 +670,7 @@ function enviarLembreteRapido(a: Agendamento) {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:overflow-visible overflow-x-auto lg:min-w-0">
           {COLUNAS.map(coluna => {
             const itens = agendamentos.filter(a => a.status === coluna.status)
             return (
@@ -672,8 +697,11 @@ function enviarLembreteRapido(a: Agendamento) {
                         <span className="text-xs font-medium text-gray-900">
                           {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        <div className="flex items-center gap-1.5">
+                                                <div className="flex items-center gap-1.5">
                           {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
+                          {!a.pago && Number(a.preco_cobrado || 0) > 0 && (
+                            <span className="text-xs" title="Pagamento pendente">💰</span>
+                          )}
                           {a.precisa_transporte && <span className="text-xs">🚐</span>}
                           {pacotesPorPet[a.pet_id] && (
                             <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
@@ -764,7 +792,7 @@ function enviarLembreteRapido(a: Agendamento) {
 
       {modalReagendar && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-1">Reagendar atendimento</h3>
             <p className="text-sm text-gray-500 mb-4">
               {modalReagendar.pets?.nome} — {modalReagendar.customers?.nome}
@@ -811,12 +839,12 @@ function enviarLembreteRapido(a: Agendamento) {
         </div>
       )}
 
-      {infoAberto && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={e => e.target === e.currentTarget && setInfoAberto(null)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Informacoes do agendamento</h3>
+            {infoAberto && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={e => e.target === e.currentTarget && setInfoAberto(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Informacoes do agendamento</h3>
 
-                        {!infoAberto.observacoes && (
+            {!infoAberto.observacoes && (
               <div className="bg-red-50 border border-red-100 rounded-lg p-3 mb-4">
                 <p className="text-sm text-red-700 font-medium">⚠️ Servico nao definido</p>
                 <p className="text-xs text-red-600 mt-0.5 mb-2">
@@ -844,7 +872,75 @@ function enviarLembreteRapido(a: Agendamento) {
                 <p className="text-xs text-gray-400">Pet</p>
                 <p className="text-gray-900">{infoAberto.pets?.nome}</p>
               </div>
-                            <div>
+
+              {infoAberto.status === 'em_espera' ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { aprovarAgendamento(infoAberto); setInfoAberto(null) }}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition-colors"
+                  >
+                    ✓ Aprovar
+                  </button>
+                  <button
+                    onClick={() => { recusarAgendamento(infoAberto.id); setInfoAberto(null) }}
+                    className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs py-2 rounded-lg transition-colors"
+                  >
+                    ✕ Recusar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  {PROXIMO_STATUS[infoAberto.status] && (
+                    <button
+                      onClick={() => { avancarStatus(infoAberto.id, infoAberto.status); setInfoAberto(null) }}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors"
+                    >
+                      Avancar →
+                    </button>
+                  )}
+                  {infoAberto.status !== 'concluido' && (
+                    <button
+                      onClick={() => { marcarFalta(infoAberto.id); setInfoAberto(null) }}
+                      className="text-xs text-red-500 hover:underline px-2"
+                    >
+                      Faltou
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <p className="text-xs text-gray-400">Valor</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-gray-900">R$ {Number(infoAberto.preco_cobrado || 0).toFixed(2).replace('.', ',')}</p>
+                  {Number(infoAberto.preco_cobrado || 0) > 0 && (
+                    infoAberto.pago ? (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Pago</span>
+                    ) : (
+                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">💰 Pendente</span>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {Number(infoAberto.preco_cobrado || 0) > 0 && !infoAberto.pago && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => marcarComoPago(infoAberto.id)}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition-colors"
+                  >
+                    ✓ Marcar como pago
+                  </button>
+                  <button
+                    onClick={() => enviarFatura(infoAberto)}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors"
+                  >
+                    📤 Enviar fatura
+                  </button>
+                </div>
+              )}
+
+              <div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-400">Servicos</p>
                   <button
@@ -856,67 +952,38 @@ function enviarLembreteRapido(a: Agendamento) {
                 </div>
                 <p className="text-gray-900">{infoAberto.observacoes || '-'}</p>
               </div>
+
               <div>
                 <p className="text-xs text-gray-400">Profissional</p>
                 <p className="text-gray-900">{infoAberto.professionals?.nome || 'Nao definido'}</p>
               </div>
-                            <div>
-                <p className="text-xs text-gray-400">Valor</p>
-                <p className="text-gray-900">R$ {Number(infoAberto.preco_cobrado || 0).toFixed(2).replace('.', ',')}</p>
-              </div>
+
               {infoAberto.precisa_transporte && (
-                <>
-                  <div>
-                    <p className="text-xs text-gray-400">Endereco de coleta</p>
-                    <p className="text-gray-900">{infoAberto.endereco_coleta}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Endereco de entrega</p>
-                    <p className="text-gray-900">{infoAberto.endereco_entrega}</p>
-                  </div>
-                </>
+                <div className="border border-gray-200 rounded-lg">
+                  <button
+                    onClick={() => setMostrarTransporteModal(!mostrarTransporteModal)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left"
+                  >
+                    <span className="text-xs font-medium text-gray-700">🚐 Endereco de transporte</span>
+                    <span className="text-xs text-gray-400">{mostrarTransporteModal ? '▲' : '▼'}</span>
+                  </button>
+                  {mostrarTransporteModal && (
+                    <div className="px-3 pb-3 flex flex-col gap-2">
+                      <div>
+                        <p className="text-xs text-gray-400">Endereco de coleta</p>
+                        <p className="text-gray-900 text-sm">{infoAberto.endereco_coleta}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Endereco de entrega</p>
+                        <p className="text-gray-900 text-sm">{infoAberto.endereco_entrega}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
-              <div className="border-t border-gray-100 pt-3 flex gap-2">
-                {infoAberto.status === 'em_espera' ? (
-                  <>
-                    <button
-                      onClick={() => { aprovarAgendamento(infoAberto); setInfoAberto(null) }}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg transition-colors"
-                    >
-                      ✓ Aprovar
-                    </button>
-                    <button
-                      onClick={() => { recusarAgendamento(infoAberto.id); setInfoAberto(null) }}
-                      className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs py-2 rounded-lg transition-colors"
-                    >
-                      ✕ Recusar
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {PROXIMO_STATUS[infoAberto.status] && (
-                      <button
-                        onClick={() => { avancarStatus(infoAberto.id, infoAberto.status); setInfoAberto(null) }}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors"
-                      >
-                        Avancar →
-                      </button>
-                    )}
-                    {infoAberto.status !== 'concluido' && (
-                      <button
-                        onClick={() => { marcarFalta(infoAberto.id); setInfoAberto(null) }}
-                        className="text-xs text-red-500 hover:underline px-2"
-                      >
-                        Faltou
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-
               <div className="flex items-center justify-center gap-2">
-                                <button
+                <button
                   onClick={() => { setTicketAberto(infoAberto); setInfoAberto(null) }}
                   title="Imprimir ticket"
                   className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
@@ -939,17 +1006,25 @@ function enviarLembreteRapido(a: Agendamento) {
                 </button>
               </div>
 
-              <div className="border-t border-gray-100 pt-3">
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Observacoes (alergia, cirurgia recente, sem perfume, etc)
-                </label>
-                <textarea
-                  value={notasInternas}
-                  onChange={e => setNotasInternas(e.target.value)}
-                  placeholder="Adicione uma observacao..."
-                  rows={3}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="border border-gray-200 rounded-lg">
+                <button
+                  onClick={() => setMostrarObsModal(!mostrarObsModal)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left"
+                >
+                  <span className="text-xs font-medium text-gray-700">📝 Observacoes</span>
+                  <span className="text-xs text-gray-400">{mostrarObsModal ? '▲' : '▼'}</span>
+                </button>
+                {mostrarObsModal && (
+                  <div className="px-3 pb-3">
+                    <textarea
+                      value={notasInternas}
+                      onChange={e => setNotasInternas(e.target.value)}
+                      placeholder="Adicione uma observacao (alergia, cirurgia recente, sem perfume, etc)..."
+                      rows={3}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -960,7 +1035,7 @@ function enviarLembreteRapido(a: Agendamento) {
               >
                 Fechar
               </button>
-                            <button
+              <button
                 onClick={salvarNotasInternas}
                 disabled={salvandoNotas}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
