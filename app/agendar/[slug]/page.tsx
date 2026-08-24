@@ -15,6 +15,7 @@ type Tenant = {
   preco_por_km: number | null
   valor_minimo_transporte: number | null
   plan_id: string | null
+  chave_pix: string | null
 }
 
 type PorteId = 'mini' | 'pequeno' | 'medio' | 'grande' | 'extra_grande' | 'gigante'
@@ -190,13 +191,14 @@ export default function AgendarPage() {
   const [faixasTransporte, setFaixasTransporte] = useState<{ raio_min_km: number; raio_max_km: number; valor_fixo: number }[]>([])
   const [transporteIdaVolta, setTransporteIdaVolta] = useState(false)
   const [distanciaKm, setDistanciaKm] = useState<number | null>(null)
-  const [calculandoDistancia, setCalculandoDistancia] = useState(false)
+    const [calculandoDistancia, setCalculandoDistancia] = useState(false)
+  const [formaPagamento, setFormaPagamento] = useState<'pix' | 'presencial'>('presencial')
   
   useEffect(() => {
     async function carregar() {
-      const { data: tenantData } = await supabase
+            const { data: tenantData } = await supabase
         .from('tenants')
-        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte, plan_id')
+        .select('id, nome, slug, logo_url, cor_primaria, endereco_lat, endereco_lng, preco_por_km, valor_minimo_transporte, plan_id, chave_pix')
         .eq('slug', slug)
         .single()
 
@@ -1586,6 +1588,45 @@ export default function AgendarPage() {
                       ))}
                     </div>
                   )}
+
+                                    <div className="border border-gray-200 rounded-lg p-3">
+                    <p className="text-sm text-gray-700 mb-2">Forma de pagamento</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormaPagamento('presencial')}
+                        className={`text-xs py-2 rounded-lg border transition-colors ${
+                          formaPagamento === 'presencial' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                        }`}
+                      >
+                        💵 Dinheiro/Cartao na hora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormaPagamento('pix')}
+                        disabled={!tenant?.chave_pix}
+                        className={`text-xs py-2 rounded-lg border transition-colors disabled:opacity-40 ${
+                          formaPagamento === 'pix' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                        }`}
+                      >
+                        📱 Pix
+                      </button>
+                    </div>
+
+                    {formaPagamento === 'pix' && tenant?.chave_pix && (
+                      <div className="bg-blue-50 rounded-lg p-3 mt-3">
+                        <p className="text-xs text-blue-700 mb-1">Chave Pix para pagamento antecipado:</p>
+                        <p className="text-sm font-medium text-blue-900 break-all">{tenant.chave_pix}</p>
+                        <button
+                          type="button"
+                          onClick={() => { navigator.clipboard.writeText(tenant.chave_pix || ''); alert('Chave copiada!') }}
+                          className="text-xs text-blue-600 hover:underline mt-2"
+                        >
+                          📋 Copiar chave
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   {erroAgendamento && <p className="text-red-500 text-sm">{erroAgendamento}</p>}
 

@@ -97,7 +97,9 @@ function ConfiguracoesConteudo() {
   const [whatsappConectado, setWhatsappConectado] = useState(false)
   const [salvandoWhatsapp, setSalvandoWhatsapp] = useState(false)
     const [temWhatsappNoPlano, setTemWhatsappNoPlano] = useState(true)
-  const [apenasCatalogo, setApenasCatalogo] = useState(false)
+    const [apenasCatalogo, setApenasCatalogo] = useState(false)
+  const [chavePix, setChavePix] = useState('')
+  const [salvandoChavePix, setSalvandoChavePix] = useState(false)
 
   const supabase = createClient()
 
@@ -106,13 +108,13 @@ function ConfiguracoesConteudo() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data } = await supabase
+            const { data } = await supabase
         .from('tenants')
-        .select('id, zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id, preco_por_km, valor_minimo_transporte')
+        .select('id, zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id, preco_por_km, valor_minimo_transporte, chave_pix')
         .eq('email', user.email)
         .single()
 
-      if (data) {
+           if (data) {
         setZapiInstanceId(data.zapi_instance_id || '')
         setZapiToken(data.zapi_token || '')
         setWhatsappConectado(data.whatsapp_conectado || false)
@@ -120,6 +122,7 @@ function ConfiguracoesConteudo() {
         setCorPrimaria(data.cor_primaria || '#1a56db')
         setPrecoPorKm(data.preco_por_km?.toString() || '')
         setValorMinimoTransporte(data.valor_minimo_transporte?.toString() || '5.00')
+        setChavePix(data.chave_pix || '')
 
                 if (data.plan_id) {
           const { data: plano } = await supabase
@@ -175,7 +178,20 @@ function ConfiguracoesConteudo() {
     setLogoUrl(urlData.publicUrl)
     setEnviandoLogo(false)
   }
+  async function salvarChavePix() {
+    setSalvandoChavePix(true)
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSalvandoChavePix(false); return }
+
+    await supabase
+      .from('tenants')
+      .update({ chave_pix: chavePix || null })
+      .eq('email', user.email)
+
+    setSalvandoChavePix(false)
+    alert('Chave Pix salva!')
+  }
   async function salvarMarca() {
     setSalvandoMarca(true)
 
@@ -434,9 +450,42 @@ function ConfiguracoesConteudo() {
             </div>
           ))}
         </div>
-      </SecaoRetravel>
+            </SecaoRetravel>
 
-            {!apenasCatalogo && (
+      {!apenasCatalogo && (
+      <SecaoRetravel
+        titulo="Pagamento"
+        resumo="Chave Pix para receber pagamentos antecipados"
+        icone="💳"
+        aberta={secaoAberta === 'pagamento'}
+        onToggle={() => toggleSecao('pagamento')}
+      >
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">Chave Pix</label>
+            <input
+              type="text"
+              value={chavePix}
+              onChange={e => setChavePix(e.target.value)}
+              placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatoria"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Sera exibida ao cliente quando ele escolher pagar via Pix no agendamento online
+            </p>
+          </div>
+          <button
+            onClick={salvarChavePix}
+            disabled={salvandoChavePix}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {salvandoChavePix ? 'Salvando...' : 'Salvar chave Pix'}
+          </button>
+        </div>
+      </SecaoRetravel>
+      )}
+
+      {!apenasCatalogo && (
       <SecaoRetravel
         titulo="Transporte por distancia"
         resumo="Endereco base, preco por km e faixas fixas"
