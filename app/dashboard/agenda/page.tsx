@@ -15,10 +15,11 @@ type Agendamento = {
   customer_id: string
   service_id: string
   pet_id: string
-        observacoes: string | null
+          observacoes: string | null
   notas_internas: string | null
   pago: boolean
   is_recorrente: boolean
+  customer_package_id: string | null
   customers: { nome: string; telefone: string } | null
   pets: { nome: string } | null
   professionals: { nome: string; cor_agenda: string } | null
@@ -121,7 +122,7 @@ export default function AgendaPage() {
         const { data } = await supabase
       .from('appointments')
       .select(`
-                                id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago, is_recorrente,
+                                       id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago, is_recorrente, customer_package_id,
         customers ( nome, telefone ),
         pets ( nome ),
         professionals ( nome, cor_agenda )
@@ -167,27 +168,33 @@ export default function AgendaPage() {
     await supabase.from('appointments').update({ status: proximo }).eq('id', id)
 
     if (proximo === 'concluido') {
-      const agendamento = agendamentos.find(a => a.id === id)
+            const agendamento = agendamentos.find(a => a.id === id)
       if (agendamento) {
-        const { data: tenant } = await supabase.from('tenants').select('id').single()
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data: tenant } = user ? await supabase.from('tenants').select('id').eq('email', user.email).single() : { data: null }
         if (tenant) {
-          const { data: pacoteAtivo } = await supabase
-            .from('customer_packages')
-            .select('id, package_id, sessoes_restantes, service_packages ( service_id )')
-            .eq('customer_id', agendamento.customers ? (agendamento as any).customer_id : null)
-            .eq('status', 'ativo')
-            .gt('sessoes_restantes', 0)
+          if (agendamento.customer_package_id) {
+            const { data: pacote } = await supabase
+              .from('customer_packages')
+              .select('sessoes_usadas, sessoes_total')
+              .eq('id', agendamento.customer_package_id)
+              .single()
 
-          const pacoteCompativel = (pacoteAtivo as any)?.find(
-            (pc: any) => pc.service_packages?.service_id === (agendamento as any).service_id
-          )
+            if (pacote) {
+              const novasSessoesUsadas = (pacote.sessoes_usadas || 0) + 1
+              const cicloCompleto = novasSessoesUsadas >= pacote.sessoes_total
 
-          if (pacoteCompativel) {
-            await supabase.from('package_usage').insert({
-              customer_package_id: pacoteCompativel.id,
-              appointment_id: id,
-            })
-          } else {
+              await supabase
+                .from('customer_packages')
+                .update({
+                  sessoes_usadas: novasSessoesUsadas,
+                  status: cicloCompleto ? 'concluido' : 'ativo',
+                })
+                .eq('id', agendamento.customer_package_id)
+            }
+          }
+
+          if (Number(agendamento.preco_cobrado || 0) > 0) {
             await supabase.from('financial_transactions').insert({
               tenant_id: tenant.id,
               tipo: 'receita',
