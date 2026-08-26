@@ -701,41 +701,114 @@ function enviarLembreteRapido(a: Agendamento) {
                     <p className="text-xs text-gray-300 text-center py-6">Vazio</p>
                   )}
 
-                                    {itens.map(a => (
-                    <button
+                                     {itens.map(a => (
+                    <div
                       key={a.id}
-                      onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
-                      className={`bg-white rounded-xl p-3 text-left hover:shadow-sm transition-all w-full border-l-4 ${
+                      className={`bg-white rounded-xl p-3 w-full border-l-4 ${
                         a.is_recorrente ? 'border-purple-500' : coluna.borda
                       } ${coluna.destaque ? 'ring-1 ring-yellow-300 shadow-sm' : 'border-t border-r border-b border-gray-100'}`}
                     >
-                                            <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-medium text-gray-900">
-                          {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                                                                        <div className="flex items-center gap-1.5">
-                          {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
-                          {!a.pago && Number(a.preco_cobrado || 0) > 0 && (
-                            <span className="text-xs" title="Pagamento pendente">💰</span>
-                          )}
-                          {a.is_recorrente && <span className="text-xs" title="Faz parte de um plano recorrente">🔁</span>}
-                          {a.precisa_transporte && <span className="text-xs">🚐</span>}
-                          {pacotesPorPet[a.pet_id] && (
-                            <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
-                              🎁 {pacotesPorPet[a.pet_id].usadas + 1}/{pacotesPorPet[a.pet_id].total}
-                            </span>
-                          )}
-                          <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0"
-                            style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
-                          >
-                            {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
+                      <button
+                        onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
+                        className="text-left w-full"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-medium text-gray-900">
+                            {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
+                            {!a.pago && Number(a.preco_cobrado || 0) > 0 && (
+                              <span className="text-xs" title="Pagamento pendente">💰</span>
+                            )}
+                            {a.is_recorrente && <span className="text-xs" title="Faz parte de um plano recorrente">🔁</span>}
+                            {a.precisa_transporte && <span className="text-xs">🚐</span>}
+                            {pacotesPorPet[a.pet_id] && (
+                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
+                                🎁 {pacotesPorPet[a.pet_id].usadas + 1}/{pacotesPorPet[a.pet_id].total}
+                              </span>
+                            )}
+                            <div
+                              className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0"
+                              style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
+                            >
+                              {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 truncate">{a.pets?.nome}</p>
-                      <p className="text-xs text-gray-400 truncate">{a.customers?.nome}</p>
-                    </button>
+                        <p className="text-sm font-medium text-gray-900 truncate">{a.pets?.nome}</p>
+                        <p className="text-xs text-gray-400 truncate">{a.customers?.nome}</p>
+                      </button>
+
+                      {a.status === 'concluido' ? (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs text-gray-500">
+                              R$ {Number(a.preco_cobrado || 0).toFixed(2).replace('.', ',')}
+                            </p>
+                            {a.pago ? (
+                              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Pago</span>
+                            ) : (
+                              <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">Pendente</span>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => enviarFatura(a)}
+                              className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 text-[11px] py-1.5 rounded-lg transition-colors"
+                            >
+                              📤 Avisar tutor
+                            </button>
+                            {!a.pago && (
+                              <button
+                                onClick={() => marcarComoPago(a.id)}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
+                              >
+                                ✓ Finalizado
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 mt-2">
+                          {a.status === 'em_espera' ? (
+                            <>
+                              <button
+                                onClick={() => aprovarAgendamento(a)}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
+                              >
+                                ✓ Aprovar
+                              </button>
+                              <button
+                                onClick={() => recusarAgendamento(a.id)}
+                                className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] py-1.5 rounded-lg transition-colors"
+                              >
+                                ✕ Recusar
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {PROXIMO_STATUS[a.status] && (
+                                <button
+                                  onClick={() => avancarStatus(a.id, a.status)}
+                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
+                                >
+                                  Avancar →
+                                </button>
+                              )}
+                              {a.status !== 'concluido' && (
+                                <button
+                                  onClick={() => marcarFalta(a.id)}
+                                  className="text-[11px] text-red-500 hover:underline px-2"
+                                >
+                                  Faltou
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                                        </div>
                   ))}
                 </div>
               </div>

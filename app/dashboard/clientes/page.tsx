@@ -33,9 +33,21 @@ export default function ClientesPage() {
   const [erro, setErro] = useState('')
   const supabase = createClient()
 
-  async function carregarDados() {
+    async function carregarDados() {
     setCarregando(true)
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCarregando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setCarregando(false)
       return
@@ -45,17 +57,9 @@ export default function ClientesPage() {
       .from('customers')
       .select('id, nome, telefone, cpf, pets ( id, nome )')
       .eq('tenant_id', tenant.id)
-      .eq('ativo', true)
       .order('nome')
 
-    const { data: pacotesData } = await supabase
-      .from('service_packages')
-      .select('id, nome, quantidade_sessoes, preco_total, validade_dias')
-      .eq('tenant_id', tenant.id)
-      .eq('ativo', true)
-
     setClientes((clientesData as any) || [])
-    setPacotes(pacotesData || [])
     setCarregando(false)
   }
 
