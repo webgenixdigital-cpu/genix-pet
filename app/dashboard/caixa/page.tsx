@@ -12,6 +12,7 @@ type Lancamento = {
   forma_pagamento: string | null
   status: string
   data_lancamento: string
+  appointment_id: string | null
   customers: { nome: string } | null
   bank_accounts: { nome: string } | null
 }
@@ -34,6 +35,7 @@ function formatarMoeda(valor: number): string {
 
 export default function CaixaPage() {
   const [dataFiltro, setDataFiltro] = useState(formatarDataISO(new Date()))
+  const [buscaLancamento, setBuscaLancamento] = useState('')
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([])
   const [contas, setContas] = useState<Conta[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -61,9 +63,21 @@ export default function CaixaPage() {
 
   const categoriasReceita = ['Servico', 'Produto', 'Pacote', 'Outro']
   const categoriasDespesa = ['Aluguel', 'Salario', 'Fornecedor', 'Insumos', 'Manutencao', 'Outro']
-  async function carregarDados() {
+    async function carregarDados() {
     setCarregando(true)
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCarregando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setCarregando(false)
       return
@@ -71,7 +85,7 @@ export default function CaixaPage() {
 
     const { data: lancamentosData } = await supabase
       .from('financial_transactions')
-      .select('id, tipo, categoria, descricao, valor, forma_pagamento, status, data_lancamento, customers ( nome ), bank_accounts ( nome )')
+            .select('id, tipo, categoria, descricao, valor, forma_pagamento, status, data_lancamento, appointment_id, customers ( nome ), bank_accounts ( nome )')
       .eq('tenant_id', tenant.id)
       .eq('data_lancamento', dataFiltro)
       .order('criado_em', { ascending: false })
@@ -101,7 +115,14 @@ export default function CaixaPage() {
       return
     }
 
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+        const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
     if (!tenant) return
 
     const { data } = await supabase
@@ -124,7 +145,19 @@ export default function CaixaPage() {
       return
     }
 
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+        const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setErro('Usuario nao autenticado.')
+      setSalvando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setErro('Tenant nao encontrado.')
       setSalvando(false)
@@ -168,10 +201,17 @@ export default function CaixaPage() {
     }
   }
 
-  async function salvarConta() {
+    async function salvarConta() {
     if (!nomeContaNova) return
 
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
     if (!tenant) return
 
     await supabase.from('bank_accounts').insert({
@@ -196,7 +236,7 @@ export default function CaixaPage() {
     setContaRecebimento('')
   }
 
-  async function confirmarRecebimento() {
+    async function confirmarRecebimento() {
     if (!modalReceber) return
     setRecebendo(true)
 
@@ -209,10 +249,26 @@ export default function CaixaPage() {
       })
       .eq('id', modalReceber.id)
 
+    if (modalReceber.appointment_id) {
+      await supabase
+        .from('appointments')
+        .update({ pago: true })
+        .eq('id', modalReceber.appointment_id)
+    }
+
     setRecebendo(false)
     setModalReceber(null)
     carregarDados()
   }
+
+  const buscaLower = buscaLancamento.trim().toLowerCase()
+  const lancamentosFiltrados = buscaLower
+    ? lancamentos.filter(l =>
+        l.descricao.toLowerCase().includes(buscaLower) ||
+        (l.categoria || '').toLowerCase().includes(buscaLower) ||
+        (l.customers?.nome || '').toLowerCase().includes(buscaLower)
+      )
+    : lancamentos
 
   const totalEntradas = lancamentos.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0)
   const totalSaidas = lancamentos.filter(l => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0)
@@ -279,15 +335,29 @@ export default function CaixaPage() {
           </p>
         </div>
       </div>
+            {lancamentos.length > 0 && (
+        <input
+          type="text"
+          value={buscaLancamento}
+          onChange={e => setBuscaLancamento(e.target.value)}
+          placeholder="Buscar por descricao, categoria ou cliente..."
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      )}
+
       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
       ) : lancamentos.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center">
           <p className="text-gray-400 text-sm">Nenhum lancamento hoje.</p>
         </div>
+      ) : lancamentosFiltrados.length === 0 ? (
+        <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center">
+          <p className="text-gray-400 text-sm">Nenhum lancamento encontrado para "{buscaLancamento}".</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {lancamentos.map(l => (
+          {lancamentosFiltrados.map(l => (
             <div key={l.id} className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-4">
               <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                 l.tipo === 'receita' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'

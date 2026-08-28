@@ -54,6 +54,7 @@ export default function AgendaPage() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [carregando, setCarregando] = useState(true)
   const [dataFiltro, setDataFiltro] = useState(formatarDataISO(new Date()))
+  const [buscaLancamento, setBuscaLancamento] = useState('')
   const [periodoFiltro, setPeriodoFiltro] = useState<'dia' | 'semana' | 'mes'>('dia')
   const [offsetCalendario, setOffsetCalendario] = useState(0)
     const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
@@ -395,8 +396,15 @@ function enviarLembreteRapido(a: Agendamento) {
     setModalServico(null)
     carregarAgendamentos()
   }
-    async function marcarComoPago(id: string) {
+      async function marcarComoPago(id: string) {
     await supabase.from('appointments').update({ pago: true }).eq('id', id)
+
+    await supabase
+      .from('financial_transactions')
+      .update({ status: 'pago' })
+      .eq('appointment_id', id)
+      .eq('status', 'pendente')
+
     setInfoAberto(null)
     carregarAgendamentos()
   }
