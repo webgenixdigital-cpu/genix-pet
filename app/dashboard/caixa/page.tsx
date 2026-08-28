@@ -13,6 +13,7 @@ type Lancamento = {
   status: string
   data_lancamento: string
   appointment_id: string | null
+  customer_package_id: string | null
   customers: { nome: string } | null
   bank_accounts: { nome: string } | null
 }
@@ -85,7 +86,7 @@ export default function CaixaPage() {
 
     const { data: lancamentosData } = await supabase
       .from('financial_transactions')
-            .select('id, tipo, categoria, descricao, valor, forma_pagamento, status, data_lancamento, appointment_id, customers ( nome ), bank_accounts ( nome )')
+      .select('id, tipo, categoria, descricao, valor, forma_pagamento, status, data_lancamento, appointment_id, customer_package_id, customers ( nome ), bank_accounts ( nome )')
       .eq('tenant_id', tenant.id)
       .eq('data_lancamento', dataFiltro)
       .order('criado_em', { ascending: false })
@@ -249,11 +250,18 @@ export default function CaixaPage() {
       })
       .eq('id', modalReceber.id)
 
-    if (modalReceber.appointment_id) {
+        if (modalReceber.appointment_id) {
       await supabase
         .from('appointments')
         .update({ pago: true })
         .eq('id', modalReceber.appointment_id)
+    }
+
+    if (modalReceber.customer_package_id) {
+      await supabase
+        .from('customer_packages')
+        .update({ pago: true })
+        .eq('id', modalReceber.customer_package_id)
     }
 
     setRecebendo(false)

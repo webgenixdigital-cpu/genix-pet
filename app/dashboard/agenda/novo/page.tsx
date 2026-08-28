@@ -184,6 +184,8 @@ export default function AgendarPage() {
   const [bairroColeta, setBairroColeta] = useState('')
   const [cidadeColeta, setCidadeColeta] = useState('')
   const [ufColeta, setUfColeta] = useState('')
+  const [ehRecorrente, setEhRecorrente] = useState(false)
+  const [frequenciaMensal, setFrequenciaMensal] = useState(1)
   const [cepColeta, setCepColeta] = useState('')
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [faixasTransporte, setFaixasTransporte] = useState<{ raio_min_km: number; raio_max_km: number; valor_fixo: number }[]>([])
@@ -718,7 +720,7 @@ export default function AgendarPage() {
         petId = novoPet.id
       }
 
-      if (!primeiroPetNome) primeiroPetNome = pet.nome
+            if (!primeiroPetNome) primeiroPetNome = pet.nome
 
       const { selecionados, total, duracao } = resumoPet(pet)
       const nomesServicos = selecionados.map(i => i.nome).join(' + ')
@@ -727,6 +729,63 @@ export default function AgendarPage() {
       const inicio = new Date(new Date(`${dataSelecionada}T${horarioSelecionado}:00`).getTime() + horarioAcumuladoMs)
       const fim = new Date(inicio.getTime() + duracaoMs)
       horarioAcumuladoMs += duracaoMs
+
+      let customerPackageId: string | null = null
+
+      if (pet.planoEscolhido && pet.planoAtivarAgora) {
+        const plano = pet.planoEscolhido
+
+        const ciclosNaoPagos = await supabase
+          .from('customer_packages')
+          .select('id')
+          .eq('pet_id', petId)
+          .eq('pago', false)
+          .lte('sessoes_restantes', 0)
+          .limit(1)
+
+        if (ciclosNaoPagos.data && ciclosNaoPagos.data.length > 0) {
+          erroCriacao = 'Este pet tem um ciclo de plano anterior nao pago. Marque como pago antes de iniciar um novo ciclo.'
+          break
+        }
+
+        const expiraEm = new Date(inicio)
+        expiraEm.setDate(expiraEm.getDate() + plano.validade_dias)
+
+                const { data: pacoteCriado, error: erroPacote } = await supabase
+          .from('customer_packages')
+          .insert({
+            tenant_id: tenant.id,
+            customer_id: clienteId,
+            pet_id: petId,
+            pacote_config_id: plano.id,
+            sessoes_total: plano.quantidade_banhos,
+            sessoes_usadas: 1,
+            preco_pago: plano.preco_final,
+            expira_em: expiraEm.toISOString(),
+            status: 'ativo',
+          })
+          .select('id')
+          .single()
+
+               customerPackageId = pacoteCriado?.id || null
+
+        if (customerPackageId) {
+          await supabase.from('financial_transactions').insert({
+            tenant_id: tenant.id,
+            tipo: 'receita',
+            categoria: 'Pacote',
+            descricao: `Plano ${plano.nome} (${plano.quantidade_banhos} banhos) - ${pet.nome}`,
+            valor: plano.preco_final,
+            data_lancamento: formatarDataISO(new Date()),
+            status: 'pendente',
+            customer_id: clienteId,
+            customer_package_id: customerPackageId,
+          })
+        }
+      }         
+
+      const totalAdicionais = selecionados.filter(i => i.grupo === 'adicional').reduce((s, i) => s + Number(i.preco), 0)
+      const precoDeHoje = (pet.planoEscolhido && pet.planoAtivarAgora) ? totalAdicionais : total
 
       const { data: agendamentoCriado, error: erroAg } = await supabase
         .from('appointments')
@@ -740,12 +799,13 @@ export default function AgendarPage() {
           fim: fim.toISOString(),
                     status: 'agendado',
           origem: 'telefone',
-          preco_cobrado: total,
+          preco_cobrado: precoDeHoje,
+          customer_package_id: customerPackageId,
           observacoes: nomesServicos,
                     precisa_transporte: precisaTransporte,
           endereco_coleta: precisaTransporte ? enderecoColetaFinal : null,
           endereco_entrega: precisaTransporte ? enderecoColetaFinal : null,
-                    is_recorrente: !!pet.planoEscolhido,
+                              is_recorrente: !!(pet.planoEscolhido && pet.planoAtivarAgora),
           forma_pagamento_solicitada: formaPagamento,
           distancia_km: precisaTransporte ? distanciaKm : null,
           transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
@@ -763,23 +823,47 @@ export default function AgendarPage() {
 
       agendamentosCriadosIds.push(agendamentoCriado.id)
 
-            if (pet.planoEscolhido) {
+                  if (pet.planoEscolhido) {
         const plano = pet.planoEscolhido
         const ativarAgora = pet.planoAtivarAgora
-        const expiraEm = new Date(inicio)
-        expiraEm.setDate(expiraEm.getDate() + plano.validade_dias)
 
-        await supabase.from('customer_packages').insert({
-          tenant_id: tenant.id,
-          customer_id: clienteId,
-          pet_id: petId,
-          pacote_config_id: plano.id,
-          sessoes_total: plano.quantidade_banhos,
-          sessoes_usadas: ativarAgora ? 1 : 0,
-          preco_pago: plano.preco_final,
-          expira_em: expiraEm.toISOString(),
-          status: 'ativo',
-        })
+        // Se nao ativar agora, o pacote ainda nao foi criado la em cima - criamos aqui
+        if (!ativarAgora && !customerPackageId) {
+          const expiraEm2 = new Date(inicio)
+          expiraEm2.setDate(expiraEm2.getDate() + plano.validade_dias)
+
+          const { data: pacoteCriado2 } = await supabase
+            .from('customer_packages')
+            .insert({
+              tenant_id: tenant.id,
+              customer_id: clienteId,
+              pet_id: petId,
+              pacote_config_id: plano.id,
+              sessoes_total: plano.quantidade_banhos,
+              sessoes_usadas: 0,
+              preco_pago: plano.preco_final,
+              expira_em: expiraEm2.toISOString(),
+              status: 'ativo',
+            })
+            .select('id')
+            .single()
+
+                    customerPackageId = pacoteCriado2?.id || null
+
+          if (customerPackageId) {
+            await supabase.from('financial_transactions').insert({
+              tenant_id: tenant.id,
+              tipo: 'receita',
+              categoria: 'Pacote',
+              descricao: `Plano ${plano.nome} (${plano.quantidade_banhos} banhos) - ${pet.nome}`,
+              valor: plano.preco_final,
+              data_lancamento: formatarDataISO(new Date()),
+              status: 'pendente',
+              customer_id: clienteId,
+              customer_package_id: customerPackageId,
+            })
+          }
+        }
 
         // Se ativar agora: o agendamento de hoje conta como sessao 1, faltam (quantidade-1) futuras
         // Se nao ativar agora: hoje fica avulso (fora do plano), e todas as (quantidade) sessoes comecam a partir da proxima data
@@ -805,7 +889,7 @@ export default function AgendarPage() {
 
           const proximoFim = new Date(proximoInicio.getTime() + duracaoMs)
 
-          futuros.push({
+                    futuros.push({
             tenant_id: tenant.id,
             customer_id: clienteId,
             pet_id: petId,
@@ -815,7 +899,8 @@ export default function AgendarPage() {
             fim: proximoFim.toISOString(),
                         status: 'agendado',
             origem: 'telefone',
-            preco_cobrado: ativarAgora ? 0 : (offset === 1 ? plano.preco_final : 0),
+            preco_cobrado: 0,
+            customer_package_id: customerPackageId,
             observacoes: `${nomesServicos} (plano ${plano.nome})`,
             is_recorrente: true,
             recorrencia_pai_id: agendamentoCriado.id,
@@ -1644,13 +1729,15 @@ export default function AgendarPage() {
             <p className="text-sm text-gray-500 mt-1">
               {new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')} as {horarioSelecionado}
             </p>
-                        {petsConfirmados.some(p => p.planoEscolhido) && (
+            {ehRecorrente && (
               <p className="text-xs text-blue-600 mt-2">
-                Os proximos agendamentos recorrentes tambem foram criados!
+                Seus proximos agendamentos recorrentes tambem foram criados e aguardam aprovacao!
               </p>
             )}
-            <a
-              href="/dashboard/agenda"
+                        
+                          
+<a              
+href="/dashboard/agenda"
               className="inline-block mt-4 text-sm text-blue-600 hover:underline"
             >
               Ver agenda

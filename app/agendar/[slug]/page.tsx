@@ -778,8 +778,22 @@ export default function AgendarPage() {
           .select('id')
           .single()
 
-                        customerPackageId = pacoteCriado?.id || null
-      }
+               customerPackageId = pacoteCriado?.id || null
+
+        if (customerPackageId) {
+          await supabase.from('financial_transactions').insert({
+            tenant_id: tenant.id,
+            tipo: 'receita',
+            categoria: 'Pacote',
+            descricao: `Plano ${plano.nome} (${plano.quantidade_banhos} banhos) - ${pet.nome}`,
+            valor: plano.preco_final,
+            data_lancamento: formatarDataISO(new Date()),
+            status: 'pendente',
+            customer_id: clienteId,
+            customer_package_id: customerPackageId,
+          })
+        }
+      }         
 
       const totalAdicionais = selecionados.filter(i => i.grupo === 'adicional').reduce((s, i) => s + Number(i.preco), 0)
       const precoDeHoje = (pet.planoEscolhido && pet.planoAtivarAgora) ? totalAdicionais : total
@@ -845,7 +859,21 @@ export default function AgendarPage() {
             .select('id')
             .single()
 
-          customerPackageId = pacoteCriado2?.id || null
+                    customerPackageId = pacoteCriado2?.id || null
+
+          if (customerPackageId) {
+            await supabase.from('financial_transactions').insert({
+              tenant_id: tenant.id,
+              tipo: 'receita',
+              categoria: 'Pacote',
+              descricao: `Plano ${plano.nome} (${plano.quantidade_banhos} banhos) - ${pet.nome}`,
+              valor: plano.preco_final,
+              data_lancamento: formatarDataISO(new Date()),
+              status: 'pendente',
+              customer_id: clienteId,
+              customer_package_id: customerPackageId,
+            })
+          }
         }
 
         // Se ativar agora: o agendamento de hoje conta como sessao 1, faltam (quantidade-1) futuras

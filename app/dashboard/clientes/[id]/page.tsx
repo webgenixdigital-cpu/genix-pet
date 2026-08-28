@@ -53,6 +53,16 @@ type Agendamento = {
   professionals: { nome: string } | null
 }
 
+type Pendencia = {
+  id: string
+  categoria: string | null
+  descricao: string
+  valor: number
+  data_lancamento: string
+  appointment_id: string | null
+  customer_package_id: string | null
+}
+
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
   em_espera: { label: 'Aguardando aprovacao', cor: 'bg-yellow-100 text-yellow-700' },
   agendado: { label: 'Agendado', cor: 'bg-gray-100 text-gray-600' },
@@ -78,6 +88,10 @@ export default function DetalhesClientePage() {
   const [salvando, setSalvando] = useState(false)
     const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
   const [petSelecionadoId, setPetSelecionadoId] = useState<string | null>(null)
+  const [pendencias, setPendencias] = useState<Pendencia[]>([])
+  const [modalReceber, setModalReceber] = useState<Pendencia | null>(null)
+  const [formaRecebimento, setFormaRecebimento] = useState('Dinheiro')
+  const [recebendo, setRecebendo] = useState(false)  
   const [editandoObsPet, setEditandoObsPet] = useState(false)
   const [obsPetTexto, setObsPetTexto] = useState('')
   const [salvandoObsPet, setSalvandoObsPet] = useState(false)
@@ -113,12 +127,19 @@ export default function DetalhesClientePage() {
       .eq('customer_id', clienteId)
       .order('comprado_em', { ascending: false })
 
-            const { data: agendamentosData } = await supabase
+        const { data: agendamentosData } = await supabase
       .from('appointments')
       .select('id, inicio, status, observacoes, preco_cobrado, pago, pet_id, pets ( nome ), professionals ( nome )')
       .eq('customer_id', clienteId)
       .order('inicio', { ascending: false })
       .limit(200)
+
+    const { data: pendenciasData } = await supabase
+      .from('financial_transactions')
+      .select('id, categoria, descricao, valor, data_lancamento, appointment_id, customer_package_id')
+      .eq('customer_id', clienteId)
+      .eq('status', 'pendente')
+      .order('data_lancamento', { ascending: true })
 
     if (clienteData) {
       setCliente(clienteData)
@@ -133,9 +154,10 @@ export default function DetalhesClientePage() {
       setObservacoes(clienteData.observacoes || '')
     }
 
-    setPets(petsData || [])
+        setPets(petsData || [])
     setPacotes((pacotesData as any) || [])
     setAgendamentos((agendamentosData as any) || [])
+    setPendencias(pendenciasData || [])
     setCarregando(false)
   }
 
@@ -163,6 +185,27 @@ export default function DetalhesClientePage() {
 
     setSalvando(false)
     setEditando(false)
+    carregarDados()
+  }
+    async function confirmarRecebimentoCliente() {
+    if (!modalReceber) return
+    setRecebendo(true)
+
+    await supabase
+      .from('financial_transactions')
+      .update({ status: 'pago', forma_pagamento: formaRecebimento })
+      .eq('id', modalReceber.id)
+
+    if (modalReceber.appointment_id) {
+      await supabase.from('appointments').update({ pago: true }).eq('id', modalReceber.appointment_id)
+    }
+
+    if (modalReceber.customer_package_id) {
+      await supabase.from('customer_packages').update({ pago: true }).eq('id', modalReceber.customer_package_id)
+    }
+
+    setRecebendo(false)
+    setModalReceber(null)
     carregarDados()
   }
   async function salvarObsPet() {
@@ -243,6 +286,37 @@ export default function DetalhesClientePage() {
           {editando ? 'Cancelar' : '✏️ Editar dados'}
         </button>
       </div>
+
+            {pendencias.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 mb-6">
+          <h3 className="text-sm font-medium text-orange-900 mb-3">
+            ⚠️ {pendencias.length} pendencia(s) financeira(s)
+          </h3>
+          <div className="flex flex-col gap-2">
+            {pendencias.map(p => (
+              <div key={p.id} className="bg-white rounded-lg p-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{p.descricao}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(p.data_lancamento + 'T00:00:00').toLocaleDateString('pt-BR')} • {p.categoria}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <p className="text-sm font-medium text-orange-600 whitespace-nowrap">
+                    R$ {Number(p.valor).toFixed(2).replace('.', ',')}
+                  </p>
+                  <button
+                    onClick={() => { setModalReceber(p); setFormaRecebimento('Dinheiro') }}
+                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    Receber
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
@@ -605,7 +679,7 @@ export default function DetalhesClientePage() {
               <p className="text-center text-[10px] mt-2">Seu pet esta em boas maos!</p>
             </div>
 
-            <div className="flex gap-3 mt-6 print:hidden">
+                        <div className="flex gap-3 mt-6 print:hidden">
               <button
                 onClick={() => setTicketAberto(null)}
                 className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
@@ -618,6 +692,50 @@ export default function DetalhesClientePage() {
               >
                 Imprimir ticket
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalReceber && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Receber pagamento</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {modalReceber.descricao} • R$ {Number(modalReceber.valor).toFixed(2).replace('.', ',')}
+            </p>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Forma de pagamento</label>
+                <select
+                  value={formaRecebimento}
+                  onChange={e => setFormaRecebimento(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Dinheiro">Dinheiro</option>
+                  <option value="Pix">Pix</option>
+                  <option value="Cartao de credito">Cartao de credito</option>
+                  <option value="Cartao de debito">Cartao de debito</option>
+                  <option value="Transferencia">Transferencia</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => setModalReceber(null)}
+                  className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarRecebimentoCliente}
+                  disabled={recebendo}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {recebendo ? 'Confirmando...' : 'Confirmar recebimento'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
