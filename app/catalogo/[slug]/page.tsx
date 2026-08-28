@@ -207,9 +207,9 @@ async function buscarDadosCatalogo(slug: string): Promise<CatalogoData | null> {
       capaUrl: config.capa_url,
       whatsapp: config.whatsapp,
     },
-    mensagemWhatsapp:
+        mensagemWhatsapp:
       config.mensagem_whatsapp ||
-      "Olá! Gostaria de agendar os seguintes serviços:\n\n{itens}\n\nTotal estimado: {total}\n\nPerfil do pet: {origem}",
+      "Olá! Gostaria de agendar os seguintes serviços:\n\nCliente: {cliente}\nPet: {pet}\nPerfil: {origem}\n\nServiços:\n{itens}\n\nTotal estimado: {total}\nTransporte: {transporte}",
     observacoesTosa,
     racas,
     porteItens,

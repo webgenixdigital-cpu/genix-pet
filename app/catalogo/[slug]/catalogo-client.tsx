@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from "react";
 import type { CatalogoData, Raca, RacaItem, PorteItem, PorteId, TosaTipo } from "./page";
+import { createClient } from "@supabase/supabase-js";
+
+const supabasePublico = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 // ============================================================
 // catalogo-client.tsx
@@ -15,7 +21,13 @@ import type { CatalogoData, Raca, RacaItem, PorteItem, PorteId, TosaTipo } from 
 // - resumo + envio para WhatsApp com mensagem personalizada
 // ============================================================
 
-type Passo = "inicio" | "racas" | "porte" | "servicosRaca" | "servicosPorte";
+type Passo = "identificacao" | "escolhaPet" | "inicio" | "racas" | "porte" | "servicosRaca" | "servicosPorte";
+type ClienteReconhecido = {
+  id: string;
+  nome: string;
+  telefone: string;
+  pets: { id: string; nome: string; raca: string | null; porte: string | null; pelagem: string | null }[];
+};
 
 interface Props {
   dados: CatalogoData;
@@ -28,7 +40,12 @@ function fmtMoeda(v: number) {
 }
 
 export default function CatalogoClient({ dados, portes, pelagens }: Props) {
-  const [passo, setPasso] = useState<Passo>("inicio");
+  const [passo, setPasso] = useState<Passo>("identificacao");
+  const [telefoneCliente, setTelefoneCliente] = useState("");
+  const [nomeCliente, setNomeCliente] = useState("");
+  const [clienteReconhecido, setClienteReconhecido] = useState<ClienteReconhecido | null>(null);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [petSelecionadoIdentificado, setPetSelecionadoIdentificado] = useState<string | null>(null);
   const [racaSelecionada, setRacaSelecionada] = useState<Raca | null>(null);
   const [porteSelecionado, setPorteSelecionado] = useState<(typeof portes)[number] | null>(null);
   const [pelagemSelecionada, setPelagemSelecionada] = useState<{ id: string; nome: string } | null>(null);
@@ -36,11 +53,70 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
   const [itensRaca, setItensRaca] = useState<Set<string>>(new Set());
   const [itensPorte, setItensPorte] = useState<Set<string>>(new Set());
 
-  const [modalTosa, setModalTosa] = useState<{ titulo: string; texto: string } | null>(null);
-
-  // -------------------- navegação --------------------
+    const [modalTosa, setModalTosa] = useState<{ titulo: string; texto: string } | null>(null);
+  const [avisoBloqueio, setAvisoBloqueio] = useState<string | null>(null);
+  const [precisaTransporte, setPrecisaTransporte] = useState<boolean | null>(null);
+    // -------------------- navegação --------------------
   function irPara(p: Passo) {
     setPasso(p);
+  }
+
+  // -------------------- identificacao do cliente --------------------
+  async function buscarCliente() {
+    const telefoneNumeros = telefoneCliente.replace(/\D/g, "");
+    if (telefoneNumeros.length < 8) return;
+
+    setBuscandoCliente(true);
+    setClienteReconhecido(null);
+
+    const { data } = await supabasePublico
+      .from("customers")
+      .select("id, nome, telefone, pets ( id, nome, raca, porte )")
+      .eq("tenant_id", dados.tenantId)
+      .eq("telefone", telefoneNumeros)
+      .maybeSingle();
+
+    if (data) {
+      setClienteReconhecido(data as any);
+      setNomeCliente(data.nome);
+    }
+
+    setBuscandoCliente(false);
+  }
+
+    function continuarSemIdentificar() {
+    irPara("inicio");
+  }
+
+  function continuarComIdentificacao() {
+    if (clienteReconhecido && clienteReconhecido.pets.length > 0) {
+      if (clienteReconhecido.pets.length === 1) {
+        selecionarPetIdentificado(clienteReconhecido.pets[0]);
+      } else {
+        irPara("escolhaPet" as Passo);
+      }
+    } else {
+      irPara("inicio");
+    }
+  }
+
+  function selecionarPetIdentificado(pet: ClienteReconhecido["pets"][number]) {
+    setPetSelecionadoIdentificado(pet.id);
+
+    const racaMatch = dados.racas.find((r) => r.nome.toLowerCase() === (pet.raca || "").toLowerCase());
+
+    if (racaMatch) {
+      setRacaSelecionada(racaMatch);
+      setItensRaca(new Set());
+      irPara("servicosRaca");
+    } else {
+      const porteMatch = portes.find((p) => p.id === pet.porte) || portes[2];
+      const pelagemMatch = pelagens.find((p) => p.id === pet.pelagem) || pelagens[1];
+      setPorteSelecionado(porteMatch);
+      setPelagemSelecionada(pelagemMatch);
+      setItensPorte(new Set());
+      irPara("servicosPorte");
+    }
   }
 
   function selecionarRaca(raca: Raca) {
@@ -76,12 +152,14 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
     if (jaMarcado) {
       novo.delete(item.id);
     } else {
-      if (item.grupo === "principal" && temItemDoGrupoRaca("combo")) {
-        alert("Você já selecionou um Combo. Remova o combo para escolher um serviço avulso de Banho e Tosa.");
+                  if (item.grupo === "principal" && temItemDoGrupoRaca("combo")) {
+        setAvisoBloqueio("Você já selecionou um Combo. Remova o combo para escolher um serviço avulso de Banho e Tosa.");
+        setTimeout(() => setAvisoBloqueio(null), 4000);
         return;
       }
       if (item.grupo === "combo" && temItemDoGrupoRaca("principal")) {
-        alert("Você já selecionou um serviço de Banho e Tosa. Remova-o para escolher um Combo.");
+        setAvisoBloqueio("Você já selecionou um serviço de Banho e Tosa. Remova-o para escolher um Combo.");
+        setTimeout(() => setAvisoBloqueio(null), 4000);
         return;
       }
       novo.add(item.id);
@@ -125,12 +203,14 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
     if (jaMarcado) {
       novo.delete(item.id);
     } else {
-      if (item.grupo === "principal" && temItemDoGrupoPorte("combo")) {
-        alert("Você já selecionou um Combo. Remova o combo para escolher um serviço avulso de Banho e Tosa.");
+                  if (item.grupo === "principal" && temItemDoGrupoPorte("combo")) {
+        setAvisoBloqueio("Você já selecionou um Combo. Remova o combo para escolher um serviço avulso de Banho e Tosa.");
+        setTimeout(() => setAvisoBloqueio(null), 4000);
         return;
       }
       if (item.grupo === "combo" && temItemDoGrupoPorte("principal")) {
-        alert("Você já selecionou um serviço de Banho e Tosa. Remova-o para escolher um Combo.");
+        setAvisoBloqueio("Você já selecionou um serviço de Banho e Tosa. Remova-o para escolher um Combo.");
+        setTimeout(() => setAvisoBloqueio(null), 4000);
         return;
       }
       novo.add(item.id);
@@ -152,7 +232,7 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
   }, [itensPorteDisponiveis, itensPorte, porteSelecionado]);
 
   // -------------------- envio WhatsApp --------------------
-  function enviarWhatsapp(tipo: "raca" | "porte") {
+    function enviarWhatsapp(tipo: "raca" | "porte") {
     let itensTexto = "";
     let total = 0;
     let origem = "";
@@ -169,10 +249,36 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
       origem = `Porte: ${porteSelecionado.nome} · Pelagem: ${pelagemSelecionada.nome}`;
     }
 
+    const nomePetSelecionado = petSelecionadoIdentificado
+      ? clienteReconhecido?.pets.find((p) => p.id === petSelecionadoIdentificado)?.nome
+      : null;
+
+    const transporteTexto = precisaTransporte === true ? "Sim, preciso de transporte (leva e traz)" : "Não, vou levar/buscar meu pet";
+
+    const linhas: string[] = [];
+    linhas.push("Olá! Gostaria de agendar os seguintes serviços:");
+    linhas.push("");
+    if (nomeCliente) linhas.push(`Cliente: ${nomeCliente}`);
+    if (nomePetSelecionado) linhas.push(`Pet: ${nomePetSelecionado}`);
+    linhas.push(`Perfil: ${origem}`);
+    linhas.push("");
+    linhas.push("Serviços:");
+    linhas.push(itensTexto);
+    linhas.push("");
+    linhas.push(`Total estimado: ${fmtMoeda(total)}`);
+    linhas.push(`Transporte: ${transporteTexto}`);
+
+    const mensagemPadrao = linhas.join("\n");
+
     const mensagem = dados.mensagemWhatsapp
-      .replace("{itens}", itensTexto)
-      .replace("{total}", fmtMoeda(total))
-      .replace("{origem}", origem);
+      ? dados.mensagemWhatsapp
+          .replaceAll("{itens}", itensTexto)
+          .replaceAll("{total}", fmtMoeda(total))
+          .replaceAll("{origem}", origem)
+          .replaceAll("{cliente}", nomeCliente || "")
+          .replaceAll("{pet}", nomePetSelecionado || "")
+          .replaceAll("{transporte}", transporteTexto)
+      : mensagemPadrao;
 
     const url = `https://wa.me/${dados.empresa.whatsapp}?text=${encodeURIComponent(mensagem)}`;
     window.open(url, "_blank");
@@ -229,8 +335,39 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
         ))}
       </nav>
 
-      <div className="max-w-3xl mx-auto px-4">
+            <div className="max-w-3xl mx-auto px-4">
         <div className="bg-white rounded-2xl shadow-md p-6">
+          {avisoBloqueio && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3">
+              <span>⚠️ {avisoBloqueio}</span>
+              <button onClick={() => setAvisoBloqueio(null)} className="text-amber-600 hover:text-amber-800 font-bold">
+                ✕
+              </button>
+            </div>
+          )}
+
+                              {passo === "identificacao" && (
+            <StepIdentificacao
+              telefone={telefoneCliente}
+              nome={nomeCliente}
+              onTelefoneChange={setTelefoneCliente}
+              onNomeChange={setNomeCliente}
+              onBuscar={buscarCliente}
+              buscando={buscandoCliente}
+              clienteReconhecido={clienteReconhecido}
+              onContinuar={continuarComIdentificacao}
+              onPular={continuarSemIdentificar}
+            />
+          )}
+
+          {passo === "escolhaPet" && clienteReconhecido && (
+            <StepEscolhaPet
+              pets={clienteReconhecido.pets}
+              onVoltar={() => irPara("identificacao")}
+              onSelecionar={selecionarPetIdentificado}
+            />
+          )}
+
           {passo === "inicio" && (
             <StepInicio onEscolher={(op) => irPara(op === "raca" ? "racas" : "porte")} />
           )}
@@ -252,12 +389,14 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
             />
           )}
 
-          {passo === "servicosRaca" && racaSelecionada && (
+                    {passo === "servicosRaca" && racaSelecionada && (
             <StepServicosRaca
               raca={racaSelecionada}
               itensSelecionados={itensRaca}
               bloqueio={bloqueioRaca}
               resumo={resumoRaca}
+              precisaTransporte={precisaTransporte}
+              onSelecionarTransporte={setPrecisaTransporte}
               onVoltar={() => irPara("racas")}
               onToggle={toggleItemRaca}
               onEnviar={() => enviarWhatsapp("raca")}
@@ -272,6 +411,8 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
               itensSelecionados={itensPorte}
               bloqueio={bloqueioPorte}
               resumo={resumoPorte}
+              precisaTransporte={precisaTransporte}
+              onSelecionarTransporte={setPrecisaTransporte}
               onVoltar={() => irPara("porte")}
               onToggle={toggleItemPorte}
               onEnviar={() => enviarWhatsapp("porte")}
@@ -306,6 +447,120 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
 // ============================================================
 // Subcomponentes de cada etapa
 // ============================================================
+function StepIdentificacao({
+  telefone,
+  nome,
+  onTelefoneChange,
+  onNomeChange,
+  onBuscar,
+  buscando,
+  clienteReconhecido,
+  onContinuar,
+  onPular,
+}: {
+  telefone: string;
+  nome: string;
+  onTelefoneChange: (v: string) => void;
+  onNomeChange: (v: string) => void;
+  onBuscar: () => void;
+  buscando: boolean;
+  clienteReconhecido: ClienteReconhecido | null;
+  onContinuar: () => void;
+  onPular: () => void;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg font-bold mb-1">Bem-vindo! 👋</h2>
+      <p className="text-sm text-slate-500 mb-5">
+                Informe seu telefone para agilizarmos seu proximo atendimento (opcional). {/* proximo sem acento por padrao do projeto (evita problema de encoding) */}
+      </p>
+
+      <div className="mb-4">
+        <label className="text-sm font-semibold mb-1.5 block">Seu telefone</label>
+        <input
+          type="text"
+          value={telefone}
+          onChange={(e) => onTelefoneChange(e.target.value)}
+          onBlur={onBuscar}
+          placeholder="(35) 99999-9999"
+          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
+          autoFocus
+        />
+        {buscando && <p className="text-xs text-slate-400 mt-1.5">Verificando...</p>}
+      </div>
+
+      {clienteReconhecido ? (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+          <p className="text-sm font-semibold text-green-800">
+            Bem-vindo de volta, {clienteReconhecido.nome}! 🐾
+          </p>
+          {clienteReconhecido.pets.length > 0 && (
+            <p className="text-xs text-green-700 mt-1">
+              Seus pets: {clienteReconhecido.pets.map((p) => p.nome).join(", ")}
+            </p>
+          )}
+        </div>
+      ) : (
+        telefone.replace(/\D/g, "").length >= 8 &&
+        !buscando && (
+          <div className="mb-4">
+            <label className="text-sm font-semibold mb-1.5 block">Seu nome (opcional)</label>
+            <input
+              type="text"
+              value={nome}
+              onChange={(e) => onNomeChange(e.target.value)}
+              placeholder="Maria Silva"
+              className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
+            />
+          </div>
+        )
+      )}
+
+      <button
+        onClick={onContinuar}
+        className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 mb-2"
+      >
+        Continuar
+      </button>
+      <button onClick={onPular} className="w-full text-slate-400 text-sm py-2 hover:text-slate-600">
+        Pular esta etapa
+      </button>
+    </div>
+  );
+}
+function StepEscolhaPet({
+  pets,
+  onVoltar,
+  onSelecionar,
+}: {
+  pets: ClienteReconhecido["pets"];
+  onVoltar: () => void;
+  onSelecionar: (pet: ClienteReconhecido["pets"][number]) => void;
+}) {
+  return (
+    <div>
+      <BackButton onClick={onVoltar} />
+      <h2 className="text-lg font-bold mb-1">Qual pet vai ser atendido?</h2>
+      <p className="text-sm text-slate-500 mb-5">Selecione o pet para ver os serviços já adequados a ele.</p>
+
+      <div className="flex flex-col gap-2.5">
+        {pets.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onSelecionar(p)}
+            className="flex items-center justify-between border-2 border-slate-200 rounded-xl px-4 py-3.5 text-left hover:border-blue-600 hover:bg-blue-50 transition"
+          >
+            <div>
+              <div className="font-semibold text-sm">{p.nome}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{p.raca || "SRD"}</div>
+            </div>
+            <span className="text-slate-400">→</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function StepInicio({ onEscolher }: { onEscolher: (op: "raca" | "porte") => void }) {
   return (
@@ -546,21 +801,48 @@ function ResumoBar({
   total,
   count,
   disabled,
+  precisaTransporte,
+  onSelecionarTransporte,
   onEnviar,
 }: {
   total: number;
   count: number;
   disabled: boolean;
+  precisaTransporte: boolean | null;
+  onSelecionarTransporte: (v: boolean) => void;
   onEnviar: () => void;
 }) {
   return (
     <div className="sticky bottom-0 bg-white border-t border-slate-200 pt-3.5 -mx-6 -mb-6 px-6 pb-6 rounded-b-2xl mt-5">
       <div className="text-xs text-slate-500">Itens selecionados</div>
-      <div className="font-bold mb-2.5 text-sm">
+      <div className="font-bold mb-3 text-sm">
         {count} selecionado(s) · {fmtMoeda(total)}
       </div>
+
+      <div className="mb-3.5">
+        <p className="text-xs font-semibold text-slate-600 mb-1.5">Vai precisar de transporte (leva e traz)?</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onSelecionarTransporte(true)}
+            className={`text-sm font-semibold py-2.5 rounded-xl border-2 transition ${
+              precisaTransporte === true ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"
+            }`}
+          >
+            🚐 Sim
+          </button>
+          <button
+            onClick={() => onSelecionarTransporte(false)}
+            className={`text-sm font-semibold py-2.5 rounded-xl border-2 transition ${
+              precisaTransporte === false ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"
+            }`}
+          >
+            🚶 Não preciso
+          </button>
+        </div>
+      </div>
+
       <button
-        disabled={disabled}
+        disabled={disabled || precisaTransporte === null}
         onClick={onEnviar}
         className="w-full flex items-center justify-center gap-2 bg-[#25D366] disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl hover:bg-[#1da851] disabled:cursor-not-allowed"
       >
@@ -575,6 +857,8 @@ function StepServicosRaca({
   itensSelecionados,
   bloqueio,
   resumo,
+  precisaTransporte,
+  onSelecionarTransporte,
   onVoltar,
   onToggle,
   onEnviar,
@@ -583,6 +867,8 @@ function StepServicosRaca({
   itensSelecionados: Set<string>;
   bloqueio: { principal: boolean; combo: boolean };
   resumo: { selecionados: RacaItem[]; total: number };
+  precisaTransporte: boolean | null;
+  onSelecionarTransporte: (v: boolean) => void;
   onVoltar: () => void;
   onToggle: (item: RacaItem) => void;
   onEnviar: () => void;
@@ -632,6 +918,8 @@ function StepServicosRaca({
         total={resumo.total}
         count={resumo.selecionados.length}
         disabled={resumo.selecionados.length === 0}
+        precisaTransporte={precisaTransporte}
+        onSelecionarTransporte={onSelecionarTransporte}
         onEnviar={onEnviar}
       />
     </div>
@@ -645,6 +933,8 @@ function StepServicosPorte({
   itensSelecionados,
   bloqueio,
   resumo,
+  precisaTransporte,
+  onSelecionarTransporte,
   onVoltar,
   onToggle,
   onEnviar,
@@ -655,6 +945,8 @@ function StepServicosPorte({
   itensSelecionados: Set<string>;
   bloqueio: { principal: boolean; combo: boolean };
   resumo: { selecionados: PorteItem[]; total: number };
+  precisaTransporte: boolean | null;
+  onSelecionarTransporte: (v: boolean) => void;
   onVoltar: () => void;
   onToggle: (item: PorteItem) => void;
   onEnviar: () => void;
@@ -702,10 +994,18 @@ function StepServicosPorte({
         );
       })}
 
+      {itens.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-8">
+          Nenhum serviço disponível para esse porte e pelagem no momento.
+        </p>
+      )}
+
       <ResumoBar
         total={resumo.total}
         count={resumo.selecionados.length}
         disabled={resumo.selecionados.length === 0}
+        precisaTransporte={precisaTransporte}
+        onSelecionarTransporte={onSelecionarTransporte}
         onEnviar={onEnviar}
       />
     </div>
