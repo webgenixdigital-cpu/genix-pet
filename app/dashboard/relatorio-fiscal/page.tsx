@@ -37,16 +37,28 @@ export default function RelatorioFiscalPage() {
   const [carregando, setCarregando] = useState(true)
   const supabase = createClient()
 
-  async function carregarDados() {
+    async function carregarDados() {
     setCarregando(true)
-    const { data: tenant } = await supabase.from('tenants').select('id, nome').single()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCarregando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id, nome')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setCarregando(false)
       return
     }
     setNomeTenant(tenant.nome)
 
-    const { data } = await supabase
+        const { data, error } = await supabase
       .from('financial_transactions')
       .select('id, tipo, categoria, valor, forma_pagamento, status, data_lancamento')
       .eq('tenant_id', tenant.id)
@@ -56,7 +68,7 @@ export default function RelatorioFiscalPage() {
       .lte('data_lancamento', dataFim)
       .order('data_lancamento')
 
-    setLancamentos(data || [])
+        setLancamentos(data || [])
     setCarregando(false)
   }
 
