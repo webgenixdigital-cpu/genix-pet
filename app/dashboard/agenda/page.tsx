@@ -257,7 +257,7 @@ export default function AgendaPage() {
     await supabase.from('appointments').update({ status: 'faltou' }).eq('id', id)
     carregarAgendamentos()
   }
-function enviarLembreteRapido(a: Agendamento) {
+  async function enviarLembreteRapido(a: Agendamento) {
     const telefone = (a.customers?.telefone || '').replace(/\D/g, '')
     if (!telefone) {
       alert('Cliente sem telefone cadastrado.')
@@ -269,7 +269,20 @@ function enviarLembreteRapido(a: Agendamento) {
     const dataFormatada = new Date(a.inicio).toLocaleDateString('pt-BR')
     const horarioFormatado = new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
-        const mensagem = `Ola! Passando para confirmar seu agendamento:\n\n🐾 Pet: ${a.pets?.nome}\n✂️ Servico: ${a.observacoes || 'Servico'}\n📅 Data: ${dataFormatada}\n🕐 Horario: ${horarioFormatado}\n\nConfira e confirme pra nos se esta correto.`
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: tenant } = user
+      ? await supabase.from('tenants').select('mensagens_personalizadas').eq('email', user.email).single()
+      : { data: null }
+
+    const template = (tenant?.mensagens_personalizadas as any)?.lembrete
+      || 'Ola! Passando para confirmar seu agendamento:\n\n🐾 Pet: {pet}\n✂️ Servico: {servico}\n📅 Data: {data}\n🕐 Horario: {horario}\n\nConfira e confirme pra nos se esta correto.'
+
+    const mensagem = template
+      .replaceAll('{pet}', a.pets?.nome || '')
+      .replaceAll('{servico}', a.observacoes || 'Servico')
+      .replaceAll('{data}', dataFormatada)
+      .replaceAll('{horario}', horarioFormatado)
+
     const link = `https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`
     window.open(link, '_blank')
   }
@@ -409,7 +422,7 @@ function enviarLembreteRapido(a: Agendamento) {
     carregarAgendamentos()
   }
 
-  function enviarFatura(a: Agendamento) {
+    async function enviarFatura(a: Agendamento) {
     const telefone = (a.customers?.telefone || '').replace(/\D/g, '')
     if (!telefone) {
       alert('Cliente sem telefone cadastrado.')
@@ -418,7 +431,19 @@ function enviarLembreteRapido(a: Agendamento) {
 
     const telefoneComDDI = telefone.startsWith('55') ? telefone : `55${telefone}`
 
-    const mensagem = `Ola, ${a.customers?.nome}! Segue o resumo do atendimento do(a) ${a.pets?.nome}:\n\n${a.observacoes}\n\n💰 Valor total: R$ ${Number(a.preco_cobrado || 0).toFixed(2).replace('.', ',')}\n\nFico no aguardo do pagamento. Qualquer duvida, e so chamar!`
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: tenant } = user
+      ? await supabase.from('tenants').select('mensagens_personalizadas').eq('email', user.email).single()
+      : { data: null }
+
+    const template = (tenant?.mensagens_personalizadas as any)?.fatura
+      || 'Ola, {cliente}! Segue o resumo do atendimento do(a) {pet}:\n\n{servicos}\n\n💰 Valor total: R$ {valor}\n\nFico no aguardo do pagamento. Qualquer duvida, e so chamar!'
+
+    const mensagem = template
+      .replaceAll('{cliente}', a.customers?.nome || '')
+      .replaceAll('{pet}', a.pets?.nome || '')
+      .replaceAll('{servicos}', a.observacoes || 'Servico')
+      .replaceAll('{valor}', Number(a.preco_cobrado || 0).toFixed(2).replace('.', ','))
 
     const link = `https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`
     window.open(link, '_blank')

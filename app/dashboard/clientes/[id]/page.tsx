@@ -227,7 +227,7 @@ export default function DetalhesClientePage() {
     setEditandoObsPet(false)
     carregarDados()
   }
-  function enviarTicketWhatsapp(a: Agendamento) {
+    async function enviarTicketWhatsapp(a: Agendamento) {
     const telefoneNum = telefone.replace(/\D/g, '')
     if (!telefoneNum) {
       alert('Cliente sem telefone cadastrado.')
@@ -235,7 +235,22 @@ export default function DetalhesClientePage() {
     }
     const telefoneComDDI = telefoneNum.startsWith('55') ? telefoneNum : `55${telefoneNum}`
     const dataFormatada = new Date(a.inicio).toLocaleDateString('pt-BR')
-    const mensagem = `Ola, ${nome}! Aqui esta o resumo do atendimento do(a) ${a.pets?.nome} em ${dataFormatada}:\n\n${a.observacoes || 'Servico'}\n💰 Valor: R$ ${Number(a.preco_cobrado || 0).toFixed(2).replace('.', ',')}\n\nObrigado pela confianca!`
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: tenant } = user
+      ? await supabase.from('tenants').select('mensagens_personalizadas').eq('email', user.email).single()
+      : { data: null }
+
+    const template = (tenant?.mensagens_personalizadas as any)?.resumo
+      || 'Ola, {cliente}! Aqui esta o resumo do atendimento do(a) {pet} em {data}:\n\n{servicos}\n💰 Valor: R$ {valor}\n\nObrigado pela confianca!'
+
+    const mensagem = template
+      .replaceAll('{cliente}', nome)
+      .replaceAll('{pet}', a.pets?.nome || '')
+      .replaceAll('{data}', dataFormatada)
+      .replaceAll('{servicos}', a.observacoes || 'Servico')
+      .replaceAll('{valor}', Number(a.preco_cobrado || 0).toFixed(2).replace('.', ','))
+
     window.open(`https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 

@@ -16,9 +16,23 @@ const PLANOS = [
   },
   {
     id: 'pro', nome: 'Pro', preco: 'R$ 379,90', desc: 'Ate 10 profissionais',
-    itens: ['Tudo do Premium', 'WhatsApp automatico', 'Lembretes de agendamento automaticos', 'Mensagens de pos-venda automaticas', 'Prospeccao automatica de clientes inativos', 'Suporte prioritario'],
+        itens: ['Tudo do Premium', 'WhatsApp automatico', 'Lembretes de agendamento automaticos', 'Mensagens de pos-venda automaticas', 'Prospeccao automatica de clientes inativos', 'Suporte prioritario'],
   },
 ]
+
+const MENSAGENS_PADRAO = {
+  lembrete: 'Ola! Passando para confirmar seu agendamento:\n\n🐾 Pet: {pet}\n✂️ Servico: {servico}\n📅 Data: {data}\n🕐 Horario: {horario}\n\nConfira e confirme pra nos se esta correto.',
+  fatura: 'Ola, {cliente}! Segue o resumo do atendimento do(a) {pet}:\n\n{servicos}\n\n💰 Valor total: R$ {valor}\n\nFico no aguardo do pagamento. Qualquer duvida, e so chamar!',
+  resumo: 'Ola, {cliente}! Aqui esta o resumo do atendimento do(a) {pet} em {data}:\n\n{servicos}\n💰 Valor: R$ {valor}\n\nObrigado pela confianca!',
+  valor_aberto: 'Ola, {cliente}! Passando para lembrar sobre um valor em aberto:\n\nData: {data}\nServico: {servico}\nValor: R$ {valor}\n\nCaso o valor ja tenha sido pago, pedimos por favor que nos envie o comprovante.',
+}
+
+const LEGENDA_PLACEHOLDERS: Record<string, string> = {
+  lembrete: '{pet}, {servico}, {data}, {horario}',
+  fatura: '{cliente}, {pet}, {servicos}, {valor}',
+  resumo: '{cliente}, {pet}, {data}, {servicos}, {valor}',
+  valor_aberto: '{cliente}, {data}, {servico}, {valor}',
+}
 
 function SecaoRetravel({
   titulo,
@@ -98,8 +112,13 @@ function ConfiguracoesConteudo() {
   const [salvandoWhatsapp, setSalvandoWhatsapp] = useState(false)
     const [temWhatsappNoPlano, setTemWhatsappNoPlano] = useState(true)
     const [apenasCatalogo, setApenasCatalogo] = useState(false)
-  const [chavePix, setChavePix] = useState('')
+    const [chavePix, setChavePix] = useState('')
   const [salvandoChavePix, setSalvandoChavePix] = useState(false)
+  const [msgLembrete, setMsgLembrete] = useState('')
+  const [msgFatura, setMsgFatura] = useState('')
+  const [msgResumo, setMsgResumo] = useState('')
+  const [msgValorAberto, setMsgValorAberto] = useState('')
+  const [salvandoMensagens, setSalvandoMensagens] = useState(false)
 
   const supabase = createClient()
 
@@ -108,9 +127,9 @@ function ConfiguracoesConteudo() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-            const { data } = await supabase
+                  const { data } = await supabase
         .from('tenants')
-        .select('id, zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id, preco_por_km, valor_minimo_transporte, chave_pix')
+        .select('id, zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id, preco_por_km, valor_minimo_transporte, chave_pix, mensagens_personalizadas')
         .eq('email', user.email)
         .single()
 
@@ -123,6 +142,12 @@ function ConfiguracoesConteudo() {
         setPrecoPorKm(data.preco_por_km?.toString() || '')
         setValorMinimoTransporte(data.valor_minimo_transporte?.toString() || '5.00')
         setChavePix(data.chave_pix || '')
+
+        const msgs = data.mensagens_personalizadas || {}
+        setMsgLembrete(msgs.lembrete || MENSAGENS_PADRAO.lembrete)
+        setMsgFatura(msgs.fatura || MENSAGENS_PADRAO.fatura)
+        setMsgResumo(msgs.resumo || MENSAGENS_PADRAO.resumo)
+        setMsgValorAberto(msgs.valor_aberto || MENSAGENS_PADRAO.valor_aberto)
 
                 if (data.plan_id) {
           const { data: plano } = await supabase
@@ -178,7 +203,7 @@ function ConfiguracoesConteudo() {
     setLogoUrl(urlData.publicUrl)
     setEnviandoLogo(false)
   }
-  async function salvarChavePix() {
+    async function salvarChavePix() {
     setSalvandoChavePix(true)
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -191,6 +216,35 @@ function ConfiguracoesConteudo() {
 
     setSalvandoChavePix(false)
     alert('Chave Pix salva!')
+  }
+
+  async function salvarMensagens() {
+    setSalvandoMensagens(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSalvandoMensagens(false); return }
+
+    await supabase
+      .from('tenants')
+      .update({
+        mensagens_personalizadas: {
+          lembrete: msgLembrete || null,
+          fatura: msgFatura || null,
+          resumo: msgResumo || null,
+          valor_aberto: msgValorAberto || null,
+        },
+      })
+      .eq('email', user.email)
+
+    setSalvandoMensagens(false)
+    alert('Mensagens salvas!')
+  }
+
+  function restaurarPadrao(chave: keyof typeof MENSAGENS_PADRAO) {
+    if (chave === 'lembrete') setMsgLembrete(MENSAGENS_PADRAO.lembrete)
+    if (chave === 'fatura') setMsgFatura(MENSAGENS_PADRAO.fatura)
+    if (chave === 'resumo') setMsgResumo(MENSAGENS_PADRAO.resumo)
+    if (chave === 'valor_aberto') setMsgValorAberto(MENSAGENS_PADRAO.valor_aberto)
   }
   async function salvarMarca() {
     setSalvandoMarca(true)
@@ -474,12 +528,60 @@ function ConfiguracoesConteudo() {
               Sera exibida ao cliente quando ele escolher pagar via Pix no agendamento online
             </p>
           </div>
-          <button
+                    <button
             onClick={salvarChavePix}
             disabled={salvandoChavePix}
             className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             {salvandoChavePix ? 'Salvando...' : 'Salvar chave Pix'}
+          </button>
+        </div>
+      </SecaoRetravel>
+      )}
+
+      {!apenasCatalogo && (
+      <SecaoRetravel
+        titulo="Mensagens do WhatsApp"
+        resumo="Personalize os textos enviados aos clientes"
+        icone="💬"
+        aberta={secaoAberta === 'mensagens'}
+        onToggle={() => toggleSecao('mensagens')}
+      >
+        <div className="flex flex-col gap-5">
+          {[
+            { chave: 'lembrete' as const, titulo: 'Lembrete de agendamento', valor: msgLembrete, setValor: setMsgLembrete },
+            { chave: 'fatura' as const, titulo: 'Fatura / Avisar tutor (agendamento concluido)', valor: msgFatura, setValor: setMsgFatura },
+            { chave: 'resumo' as const, titulo: 'Resumo de atendimento (historico do cliente)', valor: msgResumo, setValor: setMsgResumo },
+            { chave: 'valor_aberto' as const, titulo: 'Aviso de valor em aberto', valor: msgValorAberto, setValor: setMsgValorAberto },
+          ].map(m => (
+            <div key={m.chave}>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-gray-700 font-medium">{m.titulo}</label>
+                <button
+                  onClick={() => restaurarPadrao(m.chave)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Restaurar padrao
+                </button>
+              </div>
+              <textarea
+                value={m.valor}
+                onChange={e => m.setValor(e.target.value)}
+                rows={4}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Variaveis disponiveis: {LEGENDA_PLACEHOLDERS[m.chave]}
+              </p>
+            </div>
+          ))}
+
+          <button
+            onClick={salvarMensagens}
+            disabled={salvandoMensagens}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {salvandoMensagens ? 'Salvando...' : 'Salvar mensagens'}
           </button>
         </div>
       </SecaoRetravel>

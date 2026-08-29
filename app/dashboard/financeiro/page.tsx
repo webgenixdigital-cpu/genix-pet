@@ -107,7 +107,7 @@ export default function FinanceiroPage() {
   useEffect(() => {
     carregarLancamentos()
   }, [])
-    function avisarCliente(l: Lancamento) {
+      async function avisarCliente(l: Lancamento) {
     const telefoneNum = (l.customers?.telefone || '').replace(/\D/g, '')
     if (!telefoneNum) {
       alert('Cliente sem telefone cadastrado.')
@@ -116,7 +116,19 @@ export default function FinanceiroPage() {
     const telefoneComDDI = telefoneNum.startsWith('55') ? telefoneNum : `55${telefoneNum}`
     const dataFormatada = new Date(l.data_lancamento + 'T00:00:00').toLocaleDateString('pt-BR')
 
-    const mensagem = `Ola, ${l.customers?.nome}! Passando para lembrar sobre um valor em aberto:\n\nData: ${dataFormatada}\nServico: ${l.descricao}\nValor: R$ ${Number(l.valor).toFixed(2).replace('.', ',')}\n\nCaso o valor ja tenha sido pago, pedimos por favor que nos envie o comprovante.`
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: tenant } = user
+      ? await supabase.from('tenants').select('mensagens_personalizadas').eq('email', user.email).single()
+      : { data: null }
+
+    const template = (tenant?.mensagens_personalizadas as any)?.valor_aberto
+      || 'Ola, {cliente}! Passando para lembrar sobre um valor em aberto:\n\nData: {data}\nServico: {servico}\nValor: R$ {valor}\n\nCaso o valor ja tenha sido pago, pedimos por favor que nos envie o comprovante.'
+
+    const mensagem = template
+      .replaceAll('{cliente}', l.customers?.nome || '')
+      .replaceAll('{data}', dataFormatada)
+      .replaceAll('{servico}', l.descricao)
+      .replaceAll('{valor}', Number(l.valor).toFixed(2).replace('.', ','))
 
     window.open(`https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
