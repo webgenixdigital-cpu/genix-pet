@@ -9,6 +9,7 @@ type Profissional = {
   especialidades: string[]
   telefone: string | null
   cor_agenda: string
+  percentual_comissao: number | null
   ativo: boolean
 }
 
@@ -19,11 +20,15 @@ type Disponibilidade = {
 }
 
 const DIAS = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado']
+const CORES_DISPONIVEIS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#6366f1']
 
 export default function ProfissionaisPage() {
   const [profissionais, setProfissionais] = useState<Profissional[]>([])
+  const [tenantId, setTenantId] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
+
   const [modalAberto, setModalAberto] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
   const [cor, setCor] = useState('#3b82f6')
@@ -38,13 +43,28 @@ export default function ProfissionaisPage() {
 
   const supabase = createClient()
   const opcaoEspecialidades = ['Banho', 'Tosa', 'Hidratacao', 'Tosa higienica', 'Escovacao']
-
+  
   async function carregarProfissionais() {
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+    setCarregando(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCarregando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id, plan_id')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setCarregando(false)
       return
     }
+
+    setTenantId(tenant.id)
 
     const { data } = await supabase
       .from('professionals')
@@ -67,6 +87,28 @@ export default function ProfissionaisPage() {
     )
   }
 
+  function abrirNovoProfissional() {
+    setEditandoId(null)
+    setNome('')
+    setTelefone('')
+    setCor('#3b82f6')
+    setPercentualComissao('0')
+    setEspecialidades([])
+    setErro('')
+    setModalAberto(true)
+  }
+
+  function abrirEditarProfissional(p: Profissional) {
+    setEditandoId(p.id)
+    setNome(p.nome)
+    setTelefone(p.telefone || '')
+    setCor(p.cor_agenda)
+    setPercentualComissao(String(p.percentual_comissao || 0))
+    setEspecialidades(p.especialidades || [])
+    setErro('')
+    setModalAberto(true)
+  }
+  
   async function salvarProfissional() {
     setSalvando(true)
     setErro('')
@@ -77,43 +119,47 @@ export default function ProfissionaisPage() {
       return
     }
 
-    const { data: tenant } = await supabase.from('tenants').select('id, plan_id').single()
-    if (!tenant) {
+    if (!tenantId) {
       setErro('Tenant nao encontrado.')
       setSalvando(false)
       return
     }
 
-    if (tenant.plan_id) {
-      const { data: plano } = await supabase
-        .from('plans')
-        .select('max_profissionais')
-        .eq('id', tenant.plan_id)
-        .single()
+    if (!editandoId) {
+      const { data: tenant } = await supabase.from('tenants').select('plan_id').eq('id', tenantId).single()
 
-      const { count } = await supabase
-        .from('professionals')
-        .select('id', { count: 'exact', head: true })
-        .eq('tenant_id', tenant.id)
-        .eq('ativo', true)
+      if (tenant?.plan_id) {
+        const { data: plano } = await supabase
+          .from('plans')
+          .select('max_profissionais')
+          .eq('id', tenant.plan_id)
+          .single()
 
-      if (plano && count !== null && count >= plano.max_profissionais) {
-        setErro(`Seu plano permite ate ${plano.max_profissionais} profissional(is). Faca upgrade para adicionar mais.`)
-        setSalvando(false)
-        return
+        const { count } = await supabase
+          .from('professionals')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('ativo', true)
+
+        if (plano && count !== null && count >= plano.max_profissionais) {
+          setErro(`Seu plano permite ate ${plano.max_profissionais} profissional(is). Faca upgrade para adicionar mais.`)
+          setSalvando(false)
+          return
+        }
       }
     }
 
-    const { error } = await supabase.from('professionals').insert({
-      tenant_id: tenant.id,
+    const payload = {
       nome,
       telefone: telefone || null,
       cor_agenda: cor,
       especialidades,
-      ativo: true,
-      tem_acesso_sistema: false,
       percentual_comissao: parseFloat(percentualComissao) || 0,
-    })
+    }
+
+    const { error } = editandoId
+      ? await supabase.from('professionals').update(payload).eq('id', editandoId)
+      : await supabase.from('professionals').insert({ ...payload, tenant_id: tenantId, ativo: true, tem_acesso_sistema: false })
 
     if (error) {
       setErro('Erro ao salvar: ' + error.message)
@@ -121,15 +167,11 @@ export default function ProfissionaisPage() {
       return
     }
 
-    setNome('')
-    setTelefone('')
-    setCor('#3b82f6')
-    setEspecialidades([])
     setModalAberto(false)
     setSalvando(false)
     carregarProfissionais()
   }
-
+  
   async function abrirDisponibilidade(profissionalId: string) {
     const { data } = await supabase
       .from('professional_availability')
@@ -154,14 +196,8 @@ export default function ProfissionaisPage() {
   }
 
   async function salvarDisponibilidade() {
-    if (!modalDisponibilidade) return
+    if (!modalDisponibilidade || !tenantId) return
     setSalvandoDisp(true)
-
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
-    if (!tenant) {
-      setSalvandoDisp(false)
-      return
-    }
 
     await supabase
       .from('professional_availability')
@@ -172,7 +208,7 @@ export default function ProfissionaisPage() {
       .filter(d => d.hora_inicio && d.hora_fim)
       .map(d => ({
         professional_id: modalDisponibilidade,
-        tenant_id: tenant.id,
+        tenant_id: tenantId,
         dia_semana: d.dia_semana,
         hora_inicio: d.hora_inicio,
         hora_fim: d.hora_fim,
@@ -185,7 +221,8 @@ export default function ProfissionaisPage() {
     setSalvandoDisp(false)
     setModalDisponibilidade(null)
   }
-return (
+  
+  return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -193,7 +230,7 @@ return (
           <p className="text-sm text-gray-500 mt-0.5">Banhistas e tosadores da sua equipe</p>
         </div>
         <button
-          onClick={() => setModalAberto(true)}
+          onClick={abrirNovoProfissional}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors"
         >
           + Novo profissional
@@ -206,7 +243,7 @@ return (
         <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center">
           <p className="text-gray-400 text-sm">Nenhum profissional cadastrado ainda.</p>
           <button
-            onClick={() => setModalAberto(true)}
+            onClick={abrirNovoProfissional}
             className="mt-4 text-blue-600 text-sm hover:underline"
           >
             Cadastrar o primeiro profissional
@@ -230,20 +267,28 @@ return (
               </div>
               {p.telefone && <p className="text-xs text-gray-400">{p.telefone}</p>}
               <button
+                onClick={() => abrirEditarProfissional(p)}
+                className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+              >
+                Editar
+              </button>
+              <button
                 onClick={() => abrirDisponibilidade(p.id)}
                 className="text-xs text-blue-600 hover:underline whitespace-nowrap"
               >
-                Definir horarios
+                Horarios
               </button>
             </div>
           ))}
         </div>
       )}
-
+      
       {modalAberto && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Novo profissional</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {editandoId ? 'Editar profissional' : 'Novo profissional'}
+            </h3>
             <div className="flex flex-col gap-4">
               <div>
                 <label className="text-sm text-gray-600 mb-1 block">Nome</label>
@@ -264,6 +309,20 @@ return (
                   placeholder="(35) 99999-9999"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Cor na agenda</label>
+                <div className="flex gap-2">
+                  {CORES_DISPONIVEIS.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCor(c)}
+                      className={`w-8 h-8 rounded-full transition-transform ${cor === c ? 'scale-110 ring-2 ring-offset-2 ring-gray-400' : ''}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="text-sm text-gray-600 mb-1 block">Especialidades</label>
@@ -313,7 +372,7 @@ return (
           </div>
         </div>
       )}
-
+      
       {modalDisponibilidade && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg mx-4">
@@ -361,4 +420,4 @@ return (
       )}
     </div>
   )
-}  
+}
