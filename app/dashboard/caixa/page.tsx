@@ -241,12 +241,13 @@ export default function CaixaPage() {
     if (!modalReceber) return
     setRecebendo(true)
 
-    await supabase
+        await supabase
       .from('financial_transactions')
       .update({
         status: 'pago',
         forma_pagamento: formaRecebimento,
         bank_account_id: contaRecebimento || null,
+        data_lancamento: formatarDataISO(new Date()),
       })
       .eq('id', modalReceber.id)
 

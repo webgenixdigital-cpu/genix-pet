@@ -18,6 +18,9 @@ type Lancamento = {
   valor: number
   data_lancamento: string
   status: string
+  appointment_id: string | null
+  customer_package_id: string | null
+  customers: { nome: string; telefone: string } | null
 }
 
 function formatarDataISO(data: Date): string {
@@ -44,15 +47,32 @@ export default function FinanceiroPage() {
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState('')
   const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState('')
+    const [erro, setErro] = useState('')
+  const [aba, setAba] = useState<'resumo' | 'aberto'>('resumo')
+  const [valoresAbertos, setValoresAbertos] = useState<Lancamento[]>([])
+  const [modalReceber, setModalReceber] = useState<Lancamento | null>(null)
+  const [formaRecebimento, setFormaRecebimento] = useState('Dinheiro')
+  const [recebendo, setRecebendo] = useState(false)
   const supabase = createClient()
 
   const categoriasReceita = ['Servico', 'Produto', 'Pacote', 'Outro']
   const categoriasDespesa = ['Aluguel', 'Salario', 'Fornecedor', 'Insumos', 'Manutencao', 'Outro']
 
-  async function carregarLancamentos() {
+    async function carregarLancamentos() {
     setCarregando(true)
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCarregando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setCarregando(false)
       return
@@ -66,20 +86,61 @@ export default function FinanceiroPage() {
       .lte('data_lancamento', ultimoDiaDoMes())
       .order('data_lancamento', { ascending: false })
 
-    const { data: comissoesData } = await supabase
+        const { data: comissoesData } = await supabase
       .from('commissions')
       .select('id, valor_base, percentual, valor_comissao, status, professionals ( nome )')
       .eq('tenant_id', tenant.id)
       .order('criado_em', { ascending: false })
 
-    setLancamentos(data || [])
+        const { data: abertosData } = await supabase
+      .from('financial_transactions')
+      .select('id, tipo, categoria, descricao, valor, data_lancamento, status, appointment_id, customer_package_id, customers ( nome, telefone )')
+      .eq('tenant_id', tenant.id)
+      .eq('status', 'pendente')
+      .order('data_lancamento', { ascending: true })
+
+    setLancamentos((data as any) || [])
     setComissoes((comissoesData as any) || [])
+    setValoresAbertos((abertosData as any) || [])
     setCarregando(false)
   }
   useEffect(() => {
     carregarLancamentos()
   }, [])
+    function avisarCliente(l: Lancamento) {
+    const telefoneNum = (l.customers?.telefone || '').replace(/\D/g, '')
+    if (!telefoneNum) {
+      alert('Cliente sem telefone cadastrado.')
+      return
+    }
+    const telefoneComDDI = telefoneNum.startsWith('55') ? telefoneNum : `55${telefoneNum}`
+    const dataFormatada = new Date(l.data_lancamento + 'T00:00:00').toLocaleDateString('pt-BR')
 
+    const mensagem = `Ola, ${l.customers?.nome}! Passando para lembrar sobre um valor em aberto:\n\nData: ${dataFormatada}\nServico: ${l.descricao}\nValor: R$ ${Number(l.valor).toFixed(2).replace('.', ',')}\n\nCaso o valor ja tenha sido pago, pedimos por favor que nos envie o comprovante.`
+
+    window.open(`https://wa.me/${telefoneComDDI}?text=${encodeURIComponent(mensagem)}`, '_blank')
+  }
+  async function confirmarRecebimentoFinanceiro() {
+    if (!modalReceber) return
+    setRecebendo(true)
+
+               await supabase
+      .from('financial_transactions')
+      .update({ status: 'pago', forma_pagamento: formaRecebimento, data_lancamento: formatarDataISO(new Date()) })
+      .eq('id', modalReceber.id)
+
+    if (modalReceber.appointment_id) {
+      await supabase.from('appointments').update({ pago: true }).eq('id', modalReceber.appointment_id)
+    }
+
+    if (modalReceber.customer_package_id) {
+      await supabase.from('customer_packages').update({ pago: true }).eq('id', modalReceber.customer_package_id)
+    }
+
+    setRecebendo(false)
+    setModalReceber(null)
+    carregarLancamentos()
+  }
   async function salvarLancamento() {
     setSalvando(true)
     setErro('')
@@ -90,7 +151,19 @@ export default function FinanceiroPage() {
       return
     }
 
-    const { data: tenant } = await supabase.from('tenants').select('id').single()
+        const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setErro('Usuario nao autenticado.')
+      setSalvando(false)
+      return
+    }
+
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('email', user.email)
+      .single()
+
     if (!tenant) {
       setErro('Tenant nao encontrado.')
       setSalvando(false)
@@ -126,7 +199,7 @@ export default function FinanceiroPage() {
   const saldo = totalReceitas - totalDespesas
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Financeiro</h2>
           <p className="text-sm text-gray-500 mt-0.5">Resumo do mes atual</p>
@@ -139,6 +212,33 @@ export default function FinanceiroPage() {
         </button>
       </div>
 
+      <div className="flex items-center gap-2 mb-6">
+        <button
+          onClick={() => setAba('resumo')}
+          className={`text-sm px-4 py-2 rounded-lg border transition-colors ${
+            aba === 'resumo' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+          }`}
+        >
+          Resumo do mes
+        </button>
+        <button
+          onClick={() => setAba('aberto')}
+          className={`text-sm px-4 py-2 rounded-lg border transition-colors flex items-center gap-1.5 ${
+            aba === 'aberto' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+          }`}
+        >
+          Valores em aberto
+          {valoresAbertos.length > 0 && (
+            <span className={`text-xs rounded-full w-5 h-5 flex items-center justify-center ${
+              aba === 'aberto' ? 'bg-white text-blue-600' : 'bg-orange-100 text-orange-700'
+            }`}>
+              {valoresAbertos.length}
+            </span>
+          )}
+        </button>
+      </div>
+      {aba === 'resumo' && (
+      <>
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white border border-gray-100 rounded-2xl p-5">
           <p className="text-xs text-gray-400">Receitas</p>
@@ -190,7 +290,7 @@ export default function FinanceiroPage() {
         <div className="mt-8">
           <h3 className="text-sm font-medium text-gray-900 mb-3">Comissoes por profissional</h3>
           <div className="flex flex-col gap-2">
-            {comissoes.map(c => (
+                        {comissoes.map(c => (
               <div key={c.id} className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-4">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">{c.professionals?.nome}</p>
@@ -207,7 +307,91 @@ export default function FinanceiroPage() {
                   R$ {Number(c.valor_comissao).toFixed(2).replace('.', ',')}
                 </p>
               </div>
-            ))}
+                        ))}
+          </div>
+        </div>
+      )}
+      </>
+      )}
+
+      {aba === 'aberto' && (
+        <div>
+          {valoresAbertos.length === 0 ? (
+            <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center">
+              <p className="text-gray-400 text-sm">Nenhum valor em aberto. Tudo em dia! 🎉</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {valoresAbertos.map(l => (
+                <div key={l.id} className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{l.descricao}</p>
+                    <p className="text-xs text-gray-400">
+                      {l.categoria} {l.customers?.nome && `• ${l.customers.nome}`} • {new Date(l.data_lancamento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                                    <p className="text-sm font-medium text-orange-600 whitespace-nowrap">
+                    R$ {Number(l.valor).toFixed(2).replace('.', ',')}
+                  </p>
+                  <button
+                    onClick={() => avisarCliente(l)}
+                    className="text-xs border border-blue-200 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    📤 Avisar
+                  </button>
+                  <button
+                    onClick={() => { setModalReceber(l); setFormaRecebimento('Dinheiro') }}
+                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    Receber
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+            {modalReceber && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Receber pagamento</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {modalReceber.descricao} • R$ {Number(modalReceber.valor).toFixed(2).replace('.', ',')}
+            </p>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">Forma de pagamento</label>
+                <select
+                  value={formaRecebimento}
+                  onChange={e => setFormaRecebimento(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Dinheiro">Dinheiro</option>
+                  <option value="Pix">Pix</option>
+                  <option value="Cartao de credito">Cartao de credito</option>
+                  <option value="Cartao de debito">Cartao de debito</option>
+                  <option value="Transferencia">Transferencia</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => setModalReceber(null)}
+                  className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarRecebimentoFinanceiro}
+                  disabled={recebendo}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {recebendo ? 'Confirmando...' : 'Confirmar recebimento'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

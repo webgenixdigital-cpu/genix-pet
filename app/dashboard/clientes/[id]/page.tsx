@@ -62,6 +62,12 @@ type Pendencia = {
   appointment_id: string | null
   customer_package_id: string | null
 }
+function formatarDataISO(data: Date): string {
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
 
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
   em_espera: { label: 'Aguardando aprovacao', cor: 'bg-yellow-100 text-yellow-700' },
@@ -191,9 +197,9 @@ export default function DetalhesClientePage() {
     if (!modalReceber) return
     setRecebendo(true)
 
-    await supabase
+        await supabase
       .from('financial_transactions')
-      .update({ status: 'pago', forma_pagamento: formaRecebimento })
+      .update({ status: 'pago', forma_pagamento: formaRecebimento, data_lancamento: formatarDataISO(new Date()) })
       .eq('id', modalReceber.id)
 
     if (modalReceber.appointment_id) {
