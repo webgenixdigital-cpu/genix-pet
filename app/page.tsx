@@ -6,12 +6,11 @@ const LOGO_URL =
   'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/logos/ChatGPT%20Image%208%20de%20ago.%20de%202026,%2010_17_27.png'
 
 const NIX_URL =
-  'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%207%20de%20ago.%20de%202026,%2008_02_27.png'
+  'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%201%20de%20set.%20de%202026,%2010_27_45.png'
 
 // Second Nix pose, used in the "Conheça o Nix" / social section
 const NIX_SOCIAL_URL =
-  'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%208%20de%20ago.%20de%202026,%2010_18_53.png'
-
+  'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%201%20de%20set.%20de%202026,%2010_13_14.png'
 const CTA_TEXTO = 'Teste Grátis por 15 Dias'
 const CTA_SUB = 'Sem cartão de crédito. Comece em poucos minutos.'
 
