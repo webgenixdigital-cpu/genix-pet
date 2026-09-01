@@ -71,22 +71,20 @@ const DORES = [
 ] as const
 
 const MENSAGENS = [
-  { titulo: 'Lembrete de banho', desc: 'Enviado automaticamente antes do horário.', icone: 'agenda', cor: 'blue' },
+  { titulo: 'Lembrete de banho', desc: 'Envie com um clique antes do horário marcado.', icone: 'agenda', cor: 'blue' },
   { titulo: 'Confirmação', desc: 'O cliente confirma sem precisar ligar.', icone: 'check', cor: 'green' },
-  { titulo: 'Pet pronto', desc: 'Avisa a hora exata de buscar.', icone: 'pet', cor: 'amber' },
+  { titulo: 'Pet pronto', desc: 'Avise na hora exata de buscar, com um toque.', icone: 'pet', cor: 'amber' },
   { titulo: 'Reagendamento', desc: 'Resolve faltas sem perder o horário.', icone: 'relogio', cor: 'purple' },
-  { titulo: 'Progresso do pacote', desc: 'Avisa quantas sessões ainda faltam.', icone: 'caixa', cor: 'cyan' },
-  { titulo: 'Retorno', desc: 'Traz de volta quem já sumiu.', icone: 'mensagem', cor: 'rose' },
+  { titulo: 'Progresso do pacote', desc: 'Mostra quantas sessões ainda faltam.', icone: 'caixa', cor: 'cyan' },
+  { titulo: 'Retorno', desc: 'Traga de volta quem já sumiu, com um clique.', icone: 'mensagem', cor: 'rose' },
 ] as const
 
 const KANBAN_ETAPAS = [
+  { nome: 'Aguardando aprovação', cor: 'bg-yellow-400' },
   { nome: 'Agendado', cor: 'bg-gray-400' },
   { nome: 'Confirmado', cor: 'bg-blue-500' },
-  { nome: 'Em Atendimento', cor: 'bg-amber-500' },
-  { nome: 'Banho', cor: 'bg-cyan-500' },
-  { nome: 'Tosa', cor: 'bg-purple-500' },
-  { nome: 'Finalizado', cor: 'bg-green-500' },
-  { nome: 'Entregue', cor: 'bg-emerald-600' },
+  { nome: 'Em Atendimento', cor: 'bg-purple-500' },
+  { nome: 'Concluído', cor: 'bg-green-500' },
 ]
 
 const RECURSOS = [
@@ -130,9 +128,9 @@ function Botao({ href = '/cadastro', children }: { href?: string; children: Reac
   )
 }
 
-function Eyebrow({ children, claro = false }: { children: React.ReactNode; claro?: boolean }) {
+function Eyebrow({ children, claro = false, className = '' }: { children: React.ReactNode; claro?: boolean; className?: string }) {
   return (
-    <p className={`text-xs font-bold tracking-widest uppercase mb-3 ${claro ? 'text-blue-300' : 'text-blue-600'}`}>
+    <p className={`text-xs font-bold tracking-widest uppercase mb-3 ${claro ? 'text-blue-300' : 'text-blue-600'} ${className}`}>
       {children}
     </p>
   )
@@ -157,6 +155,15 @@ const CORES_BADGE: Record<CorBadge, string> = {
   purple: 'bg-purple-50 text-purple-600',
   cyan: 'bg-cyan-50 text-cyan-600',
   rose: 'bg-rose-50 text-rose-600',
+}
+
+const BORDA_TOPO: Record<CorBadge, string> = {
+  blue: 'border-t-blue-500',
+  green: 'border-t-emerald-500',
+  amber: 'border-t-amber-500',
+  purple: 'border-t-purple-500',
+  cyan: 'border-t-cyan-500',
+  rose: 'border-t-rose-500',
 }
 
 function IconBadge({ cor = 'blue', tamanho = 'w-11 h-11', children }: { cor?: CorBadge; tamanho?: string; children: React.ReactNode }) {
@@ -265,9 +272,9 @@ export default function LandingPage() {
               <IconBadge cor="green" tamanho="w-9 h-9">
                 <span className="scale-75">{Icones.whatsapp()}</span>
               </IconBadge>
-              <div>
+                            <div>
                 <p className="text-[10px] text-gray-400">WhatsApp</p>
-                <p className="text-sm font-bold text-blue-600">3 lembretes enviados</p>
+                <p className="text-sm font-bold text-blue-600">Lembrete com 1 clique</p>
               </div>
             </div>
           </div>
@@ -284,10 +291,10 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {DORES.map(d => (
+                        {DORES.map(d => (
               <div
                 key={d.texto}
-                className="bg-white border border-gray-100 rounded-[20px] p-6 flex items-center gap-4 shadow-[0_2px_16px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-250"
+                className={`bg-white border border-gray-100 border-t-4 ${BORDA_TOPO[d.cor]} rounded-[20px] p-6 flex items-center gap-4 shadow-[0_2px_16px_rgba(15,23,42,0.04)] hover:shadow-[0_16px_36px_rgba(15,23,42,0.14)] hover:-translate-y-1.5 transition-all duration-250`}
               >
                 <IconBadge cor={d.cor}>{Icones[d.icone]()}</IconBadge>
                 <p className="text-sm text-gray-700 font-medium">{d.texto}</p>
@@ -302,15 +309,21 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* NASCEU DA PRÁTICA */}
-      <section className="max-w-5xl mx-auto px-6 py-14 md:py-24 text-center">
-        <Eyebrow>Origem</Eyebrow>
-        <Titulo className="mb-4">O Genix Pet nasceu da prática.</Titulo>
-        <p className="text-gray-500 max-w-2xl mx-auto leading-relaxed">
-          Não foi desenvolvido primeiro para depois ser vendido. Foi construído ao longo de anos
-          de rotina real dentro de um pet shop — cada tela resolve um problema que já foi vivido
-          no balcão, na tesoura ou no WhatsApp.
-        </p>
+            {/* NASCEU DA PRÁTICA */}
+      <section className="bg-[#0B1730] py-14 md:py-24 relative overflow-hidden">
+        <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-blue-400/10 blur-3xl" />
+        <div className="relative max-w-5xl mx-auto px-6 text-center">
+          <Eyebrow claro>Origem</Eyebrow>
+          <h2 className="text-[28px] md:text-4xl font-extrabold text-white tracking-tight mb-4">
+            O Genix Pet nasceu da prática.
+          </h2>
+          <p className="text-blue-100/80 max-w-2xl mx-auto leading-relaxed">
+            Não foi desenvolvido primeiro para depois ser vendido. Foi construído ao longo de anos
+            de rotina real dentro de um pet shop — cada tela resolve um problema que já foi vivido
+            no balcão, na tesoura ou no WhatsApp.
+          </p>
+        </div>
       </section>
 
       {/* DASHBOARD INTELIGENTE */}
@@ -371,16 +384,16 @@ export default function LandingPage() {
           <div className="text-center mb-8 md:mb-12">
             <Eyebrow>Fluxo de atendimento</Eyebrow>
             <Titulo className="mb-2">Kanban em tempo real</Titulo>
-            <p className="text-gray-500 max-w-xl mx-auto">
-              Basta arrastar o cartão de uma etapa para outra. Toda a equipe acompanha a
+                        <p className="text-gray-500 max-w-xl mx-auto">
+              Basta um clique para avançar o pet para a próxima etapa. Toda a equipe acompanha a
               operação ao vivo, sem perguntar "cadê o pet?".
             </p>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2">
-            {KANBAN_ETAPAS.map(etapa => (
+                        {KANBAN_ETAPAS.map(etapa => (
               <div
                 key={etapa.nome}
-                className="bg-white border border-gray-100 rounded-2xl px-4 py-4 min-w-[150px] text-center shadow-[0_2px_16px_rgba(15,23,42,0.04)]"
+                className="bg-white border border-gray-100 rounded-2xl px-4 py-4 min-w-[150px] text-center shadow-[0_2px_16px_rgba(15,23,42,0.04)] hover:shadow-[0_14px_32px_rgba(15,23,42,0.14)] hover:-translate-y-1 transition-all duration-200"
               >
                 <span className={`inline-block w-2 h-2 rounded-full ${etapa.cor} mb-2`} />
                 <p className="text-xs font-semibold text-gray-700">{etapa.nome}</p>
@@ -393,8 +406,11 @@ export default function LandingPage() {
       {/* CATÁLOGO DIGITAL */}
       <section className="bg-white py-14 md:py-24 border-t border-gray-100">
         <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-14 items-center">
-          <div className="text-center md:text-left">
-            <Eyebrow>Divulgação externa</Eyebrow>
+                    <div className="text-center md:text-left">
+            <div className="flex items-center gap-2 justify-center md:justify-start mb-3">
+              <Eyebrow className="mb-0">Divulgação externa</Eyebrow>
+              <Chip>Planos Premium+</Chip>
+            </div>
             <Titulo className="mb-4">Catálogo Digital com link próprio</Titulo>
             <p className="text-gray-500 mb-6 leading-relaxed">
               Cada pet shop ganha um link exclusivo para divulgar o catálogo de serviços. O
@@ -473,13 +489,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* MENSAGENS INTELIGENTES */}
+            {/* MENSAGENS INTELIGENTES */}
       <section className="py-14 md:py-24">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-8 md:mb-12">
-            <Eyebrow>Automação no WhatsApp</Eyebrow>
-            <Titulo className="mb-2">Mensagens Inteligentes</Titulo>
-            <p className="text-gray-500 max-w-xl mx-auto">Menos trabalho repetitivo, mais tempo cuidando dos pets.</p>
+            <Eyebrow>Comunicação com o cliente</Eyebrow>
+            <Titulo className="mb-2">Mensagens prontas para o WhatsApp</Titulo>
+            <p className="text-gray-500 max-w-xl mx-auto">Modelos de mensagem personalizaveis, enviados com um clique — sem digitar tudo de novo.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {MENSAGENS.map((m, i) => (
@@ -491,7 +507,7 @@ export default function LandingPage() {
                   <IconBadge cor={m.cor} tamanho="w-7 h-7">
                     <span className="scale-[0.6]">{Icones[m.icone]()}</span>
                   </IconBadge>
-                  <span className="text-xs font-semibold text-gray-600">Automático</span>
+                  <span className="text-xs font-semibold text-gray-600">Modelo pronto</span>
                 </div>
                 <div className="bg-white rounded-xl rounded-tl-none px-4 py-3 shadow-sm">
                   <p className="text-gray-900 font-semibold text-sm mb-1">{m.titulo}</p>
@@ -520,9 +536,9 @@ export default function LandingPage() {
           <h2 className="text-[28px] md:text-4xl font-extrabold text-white tracking-tight mb-4">
             Comece com a experiência de quem já vive o mercado pet.
           </h2>
-          <p className="text-blue-100/80 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Catálogo digital com link próprio para divulgação externa, relatório fiscal e
-            controle de estoque avançado — tudo em um único plano.
+                    <p className="text-blue-100/80 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Catálogo digital com link próprio para divulgação externa, agendamento online
+            com pagamento via Pix e controle de estoque avançado — tudo em um único plano.
           </p>
 
           <Link
@@ -556,10 +572,10 @@ export default function LandingPage() {
             <Titulo>Tudo em um único lugar</Titulo>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {RECURSOS.map(r => (
+                        {RECURSOS.map(r => (
               <div
                 key={r.nome}
-                className="border border-gray-100 rounded-2xl px-4 py-5 flex flex-col items-center gap-2 text-center text-sm text-gray-700 font-medium shadow-[0_2px_16px_rgba(15,23,42,0.03)] hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-250"
+                className={`bg-white border border-gray-100 border-t-4 ${BORDA_TOPO[r.cor]} rounded-2xl px-4 py-5 flex flex-col items-center gap-2 text-center text-sm text-gray-700 font-medium shadow-[0_2px_16px_rgba(15,23,42,0.03)] hover:shadow-[0_16px_36px_rgba(15,23,42,0.14)] hover:-translate-y-1.5 transition-all duration-250`}
               >
                 <IconBadge cor={r.cor}>{Icones[r.icone]()}</IconBadge>
                 {r.nome}
@@ -647,9 +663,9 @@ export default function LandingPage() {
           {PLANOS.map(plano => (
             <div
               key={plano.nome}
-              className={`bg-white rounded-[24px] p-8 relative transition-all duration-250 ${
+                            className={`bg-white rounded-[24px] p-8 relative transition-all duration-250 ${
                 plano.destaque
-                  ? 'border-2 border-blue-500 shadow-[0_16px_40px_rgba(37,99,235,0.14)] md:-translate-y-2'
+                  ? 'border-2 border-t-[6px] border-blue-500 border-t-[#0B1730] shadow-[0_20px_48px_rgba(37,99,235,0.18)] md:-translate-y-2'
                   : 'border border-gray-200 shadow-[0_2px_16px_rgba(15,23,42,0.04)]'
               }`}
             >
@@ -708,7 +724,7 @@ export default function LandingPage() {
           </div>
         </div>
         <p className="text-center text-xs text-gray-400 mt-6">
-          Genix Pet © — Uma empresa do grupo Web Genix Digital
+          Genix Pet © — Uma empresa do grupo Genix Sistemas Integrativos. Todos os direitos reservados.
         </p>
       </footer>
     </div>
