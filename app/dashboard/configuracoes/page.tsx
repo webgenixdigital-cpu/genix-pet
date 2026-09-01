@@ -7,16 +7,19 @@ import { createClient } from '@/lib/supabase'
 
 const PLANOS = [
   {
-        id: 'starter', nome: 'Starter', preco: 'R$ 179,90', desc: 'Ate 2 profissionais',
-    itens: ['Clientes e pets ilimitados', 'Modulo financeiro e comissoes', 'Produtos e pacotes de servico', 'Agendamentos recorrentes'],
+    id: 'starter', nome: 'Starter', preco: 'R$ 179,90', desc: 'Ate 2 profissionais',
+    itens: ['Agenda completa e agendamento interno', 'Clientes, historico e pendencias', 'Financeiro, caixa e relatorio fiscal', 'Produtos com dados fiscais', 'Pacotes e planos recorrentes', 'Mensagens de WhatsApp personalizaveis'],
+    disponivel: true,
   },
   {
     id: 'premium', nome: 'Premium', preco: 'R$ 247,90', desc: 'Ate 4 profissionais',
-    itens: ['Tudo do Starter', 'Catalogo personalizado com link proprio', 'Divulgacao externa do catalogo', 'Relatorio fiscal', 'Controle de estoque avancado'],
+    itens: ['Tudo do Starter', 'Catalogo digital publico com link proprio', 'Agendamento online direto pelo catalogo', 'Pagamento via Pix no agendamento', 'Controle de estoque avancado'],
+    disponivel: true,
   },
   {
     id: 'pro', nome: 'Pro', preco: 'R$ 379,90', desc: 'Ate 10 profissionais',
-        itens: ['Tudo do Premium', 'WhatsApp automatico', 'Lembretes de agendamento automaticos', 'Mensagens de pos-venda automaticas', 'Prospeccao automatica de clientes inativos', 'Suporte prioritario'],
+    itens: ['Tudo do Premium', 'WhatsApp automatico (lembretes, pos-venda, prospeccao)', 'Busca automatica de produtos (NF-e / codigo de barras)', 'Suporte prioritario'],
+    disponivel: false,
   },
 ]
 
@@ -445,13 +448,22 @@ function ConfiguracoesConteudo() {
                       </li>
                     ))}
                   </ul>
-                  <button
-                    onClick={() => assinar(p.id)}
-                    disabled={carregando === p.id}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {carregando === p.id ? 'Redirecionando...' : 'Assinar este plano'}
-                  </button>
+                                    {p.disponivel ? (
+                    <button
+                      onClick={() => assinar(p.id)}
+                      disabled={carregando === p.id}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {carregando === p.id ? 'Redirecionando...' : 'Assinar este plano'}
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="w-full bg-gray-100 text-gray-400 text-xs py-2 rounded-lg cursor-not-allowed"
+                    >
+                      Em breve
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -494,13 +506,22 @@ function ConfiguracoesConteudo() {
                   </li>
                 ))}
               </ul>
-                             <button
-                onClick={() => assinar(p.id)}
-                disabled={carregando === p.id}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {carregando === p.id ? 'Redirecionando...' : 'Assinar'}
-              </button>
+                                           {p.disponivel ? (
+                <button
+                  onClick={() => assinar(p.id)}
+                  disabled={carregando === p.id}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {carregando === p.id ? 'Redirecionando...' : 'Assinar'}
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="w-full bg-gray-100 text-gray-400 text-xs py-2 rounded-lg cursor-not-allowed"
+                >
+                  Em breve
+                </button>
+              )}
             </div>
           ))}
         </div>

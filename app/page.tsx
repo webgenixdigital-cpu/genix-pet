@@ -12,7 +12,7 @@ const NIX_URL =
 const NIX_SOCIAL_URL =
   'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%208%20de%20ago.%20de%202026,%2010_18_53.png'
 
-const CTA_TEXTO = 'Teste Grátis por 7 Dias'
+const CTA_TEXTO = 'Teste Grátis por 15 Dias'
 const CTA_SUB = 'Sem cartão de crédito. Comece em poucos minutos.'
 
 const PLANOS = [
@@ -21,11 +21,14 @@ const PLANOS = [
     preco: '179,90',
     desc: 'Até 2 profissionais',
     destaque: false,
-        itens: [
-      'Clientes e pets ilimitados',
-      'Módulo financeiro e comissões',
-      'Produtos e pacotes de serviço',
-      'Agendamentos recorrentes',
+    disponivel: true,
+    itens: [
+      'Agenda completa e agendamento interno',
+      'Clientes, histórico e pendências',
+      'Financeiro, caixa e relatório fiscal',
+      'Produtos com dados fiscais',
+      'Pacotes e planos recorrentes',
+      'Mensagens de WhatsApp personalizáveis',
     ],
   },
   {
@@ -33,11 +36,12 @@ const PLANOS = [
     preco: '247,90',
     desc: 'Até 4 profissionais',
     destaque: true,
+    disponivel: true,
     itens: [
       'Tudo do Starter',
-      'Catálogo personalizado com link próprio',
-      'Divulgação externa do catálogo',
-      'Relatório fiscal',
+      'Catálogo digital público com link próprio',
+      'Agendamento online direto pelo catálogo',
+      'Pagamento via Pix no agendamento',
       'Controle de estoque avançado',
     ],
   },
@@ -46,13 +50,12 @@ const PLANOS = [
     preco: '379,90',
     desc: 'Até 10 profissionais',
     destaque: false,
+    disponivel: false,
     itens: [
       'Tudo do Premium',
       'Catálogo pré-preenchido com 48 raças',
-      'WhatsApp automático',
-      'Lembretes de agendamento automáticos',
-      'Mensagens de pós-venda automáticas',
-      'Prospecção automática de clientes inativos',
+      'WhatsApp automático (lembretes, pós-venda, prospecção)',
+      'Busca automática de produtos (NF-e / código de barras)',
       'Suporte prioritário',
     ],
   },
@@ -670,7 +673,13 @@ export default function LandingPage() {
                 ))}
               </ul>
 
-              <Botao>{CTA_TEXTO}</Botao>
+                            {plano.disponivel ? (
+                <Botao>{CTA_TEXTO}</Botao>
+              ) : (
+                <span className="inline-block bg-gray-100 text-gray-400 font-bold px-7 py-3.5 rounded-lg text-base cursor-not-allowed">
+                  Em breve
+                </span>
+              )}
             </div>
           ))}
         </div>

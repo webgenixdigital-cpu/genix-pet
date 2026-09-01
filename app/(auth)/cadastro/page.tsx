@@ -63,7 +63,7 @@ export default function CadastroPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 w-full max-w-md">
         <h1 className="text-2xl font-semibold text-gray-900 mb-1">Genix Pet</h1>
-        <p className="text-gray-500 text-sm mb-8">Cadastre seu pet shop — 7 dias gratis</p>
+        <p className="text-gray-500 text-sm mb-8">Cadastre seu pet shop — 15 dias gratis</p>
 
         <div className="flex flex-col gap-4">
           <div>
