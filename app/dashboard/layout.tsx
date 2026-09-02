@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
+const LOGO_URL =
+  'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/logos/ChatGPT%20Image%208%20de%20ago.%20de%202026,%2010_17_27.png'
+
 const PASSOS_TUTORIAL = [
   { id: 'inicio', titulo: 'Inicio', texto: 'Aqui voce ve o resumo do dia: agendamentos, valores a receber e despesas.' },
   { id: 'agenda', titulo: 'Agenda', texto: 'Gerencie os agendamentos do dia, aprove pedidos e acompanhe o fluxo de atendimento.' },
@@ -187,8 +190,8 @@ export default function DashboardLayout({
       ]
   return (
     <div className="min-h-screen flex bg-gray-50">
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-100 z-40 flex items-center justify-between px-4 py-3">
-        <h1 className="text-lg font-semibold text-gray-900">Genix Pet</h1>
+            <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-100 z-40 flex items-center justify-between px-4 py-3">
+        <img src={LOGO_URL} alt="Genix Pet" className="h-8" />
         <button onClick={() => setMenuAberto(!menuAberto)} className="text-2xl">
           {menuAberto ? '✕' : '☰'}
         </button>
@@ -203,11 +206,10 @@ export default function DashboardLayout({
           menuAberto ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        <div className="p-5 border-b border-gray-100 hidden md:block">
-          <h1 className="text-lg font-semibold text-gray-900">Genix Pet</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Painel de gestão</p>
+                <div className="p-5 border-b border-gray-100 hidden md:block">
+          <img src={LOGO_URL} alt="Genix Pet" className="h-9" />
+          <p className="text-xs text-gray-400 mt-1.5">Painel de gestão</p>
         </div>
-
         <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto mt-14 md:mt-0">
           {menu.map(item => (
             item.liberado ? (
