@@ -34,3 +34,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# arquivos sensiveis (nunca commitar chaves/segredos soltos em texto)
+*chave*
+*senha*
+*secreta*
+*secret*
+*.key
+credenciais*
