@@ -427,8 +427,8 @@ const pendencias = [
           ))}
         </div>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md transition-shadow">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-gray-300 transition-all">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-gray-400">Recebido hoje</p>
             <Sparkline valores={receitaHistorico} cor="#16a34a" />
@@ -441,7 +441,7 @@ const pendencias = [
           )}
         </div>
 
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md transition-shadow">
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-gray-300 transition-all">
           <p className="text-xs text-gray-400 mb-2">A receber hoje</p>
           <p className="text-xl font-semibold text-blue-600">R$ {totalHoje.aReceber.toFixed(2).replace('.', ',')}</p>
           {variacao(totalHoje.aReceber, totalOntem.aReceber) && (
@@ -496,25 +496,8 @@ const pendencias = [
           </Link>
         ))}
       </div>
-{insights.length > 0 && (
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-6">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">💡 Insights</h3>
-          <div className="flex flex-col gap-3">
-            {insights.map((ins, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl p-3">
-                <p className="text-sm text-gray-700">{ins.texto}</p>
-                <Link href={ins.link} className="text-xs text-blue-600 hover:underline whitespace-nowrap flex-shrink-0">
-                  Ver detalhes
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
         <h3 className="text-sm font-medium text-gray-900 mb-4">Agenda de hoje</h3>
-
         {carregando ? (
           <p className="text-sm text-gray-400">Carregando...</p>
         ) : agendamentosValidos.length === 0 ? (
@@ -638,12 +621,28 @@ const pendencias = [
             <p className="text-lg font-semibold text-gray-900">{indicadoresMes.novosClientes}</p>
           </div>
 
-          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+                    <div className="bg-white border border-gray-100 rounded-2xl p-4">
             <p className="text-xs text-gray-400 mb-1">Pacotes ativos</p>
             <p className="text-lg font-semibold text-gray-900">{indicadoresMes.pacotesAtivos}</p>
           </div>
         </div>
       </div>
+
+      {insights.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 mt-6 shadow-sm">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">💡 Insights</h3>
+          <div className="flex flex-col gap-3">
+            {insights.map((ins, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl p-3">
+                <p className="text-sm text-gray-700">{ins.texto}</p>
+                <Link href={ins.link} className="text-xs text-blue-600 hover:underline whitespace-nowrap flex-shrink-0">
+                  Ver detalhes
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

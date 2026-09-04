@@ -101,7 +101,16 @@ export default function CatalogoAdminPage() {
   // controla quais cards estão expandidos — por padrão tudo minimizado,
   // só mostrando o nome, até o usuário clicar para editar
   const [racasExpandidas, setRacasExpandidas] = useState<Set<string>>(new Set());
-  const [itensExpandidos, setItensExpandidos] = useState<Set<string>>(new Set());
+    const [itensExpandidos, setItensExpandidos] = useState<Set<string>>(new Set());
+  const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
+
+  function toggleGrupoExpandido(chave: string) {
+    setGruposExpandidos((prev) => {
+      const novo = new Set(prev);
+      novo.has(chave) ? novo.delete(chave) : novo.add(chave);
+      return novo;
+    });
+  }
 
   function toggleRacaExpandida(id: string) {
     setRacasExpandidas((prev) => {
@@ -351,7 +360,37 @@ export default function CatalogoAdminPage() {
     if (error) return alert("Erro: " + error.message);
     setRacaItens({ ...racaItens, [racaId]: (racaItens[racaId] ?? []).filter((i) => i.id !== itemId) });
   }
+  function gerarMensagemTabelaRaca(raca: Raca): string {
+    const itens = racaItens[raca.id] ?? [];
+        const grupos: { chave: Grupo; titulo: string }[] = [
+      { chave: "combo", titulo: "📦 Combos" },
+      { chave: "adicional", titulo: "➕ Adicionais" },
+      { chave: "principal", titulo: "🛁 Banho e Tosa" },
+    ];
 
+    let texto = `*Tabela de Serviços — ${raca.nome}*\n`;
+
+    grupos.forEach(({ chave, titulo }) => {
+      const itensGrupo = itens.filter((i) => i.grupo === chave);
+      if (itensGrupo.length === 0) return;
+
+      texto += `\n${titulo}\n`;
+      itensGrupo.forEach((item) => {
+        const preco = `R$ ${Number(item.preco).toFixed(2).replace(".", ",")}`;
+        texto += `\n*${item.nome}*`;
+        if (item.descricao) texto += `\n${item.descricao}`;
+        texto += `\n${preco}\n`;
+      });
+    });
+
+    return texto.trim();
+  }
+
+  function enviarTabelaWhatsApp(raca: Raca) {
+    const texto = gerarMensagemTabelaRaca(raca);
+    const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+    window.open(url, "_blank");
+  }
   // ---------------- itens por porte ----------------
   async function adicionarItemPorte(grupo: Grupo) {
     if (!tenantId) return;
@@ -491,9 +530,9 @@ export default function CatalogoAdminPage() {
           ["empresa", "Empresa"],
           ["racas", "Raças"],
           ["tipos-tosa", "Tipos de Tosa"],
-          ["porte-principal", "Banho e Tosa"],
+                    ["porte-combo", "Combos"],
           ["porte-adicional", "Adicionais"],
-          ["porte-combo", "Combos"],
+          ["porte-principal", "Banho e Tosa"],
         ] as [Aba, string][]).map(([id, label]) => (
           <button
             key={id}
@@ -613,40 +652,62 @@ export default function CatalogoAdminPage() {
                   }}
                 />
               </div>
-              <button onClick={() => removerRaca(raca.id)} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg mb-3">
-                Remover raça
-              </button>
+                            <div className="flex items-center gap-2 mb-3">
+                <button onClick={() => removerRaca(raca.id)} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
+                  Remover raça
+                </button>
+                <button
+                  type="button"
+                  onClick={() => enviarTabelaWhatsApp(raca)}
+                  className="text-xs font-semibold text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100"
+                >
+                  📤 Enviar tabela
+                </button>
+              </div>
 
-              {(["principal", "adicional", "combo"] as Grupo[]).map((grupo) => (
-                <div key={grupo}>
-                  <div className="text-xs font-bold uppercase text-slate-500 tracking-wide mt-3 mb-2">
-                    {grupo === "principal" ? "Banho e Tosa" : grupo === "adicional" ? "Adicionais" : "Combos"}
-                  </div>
-                  {(racaItens[raca.id] ?? [])
-                    .filter((i) => i.grupo === grupo)
-                    .map((item) => (
-                      <ItemForm
-                        key={item.id}
-                        tenantId={tenantId}
-                        item={item}
-                        expandido={itensExpandidos.has(item.id)}
-                        onToggleExpandir={() => toggleItemExpandido(item.id)}
-                        mostrarInclui={grupo === "combo"}
-                        mostrarBanhoBase={grupo === "principal"}
-                        tiposTosa={tiposTosa}
-                        onChange={(campo, valor) => atualizarItemRacaLocal(raca.id, item.id, campo, valor)}
-                        onSalvar={() => salvarItemRaca(raca.id, item.id)}
-                        onRemover={() => removerItemRaca(raca.id, item.id)}
-                      />
-                    ))}
+                            {(["combo", "adicional", "principal"] as Grupo[]).map((grupo) => {
+                const chaveGrupo = `${raca.id}-${grupo}`;
+                const grupoAberto = gruposExpandidos.has(chaveGrupo);
+                return (
+                                <div key={grupo} className="border border-slate-200 rounded-lg mt-3 mb-3 overflow-hidden">
                   <button
-                    onClick={() => adicionarItemRaca(raca.id, grupo)}
-                    className="w-full border-2 border-dashed border-slate-300 text-blue-600 font-semibold text-sm rounded-lg py-2 mb-3 hover:border-blue-600 hover:bg-blue-50"
+                    type="button"
+                    onClick={() => toggleGrupoExpandido(chaveGrupo)}
+                    className="w-full flex items-center justify-between text-xs font-bold uppercase text-slate-500 tracking-wide px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
                   >
-                    + Adicionar item
+                    <span>{grupo === "principal" ? "Banho e Tosa" : grupo === "adicional" ? "Adicionais" : "Combos"}</span>
+                    <span className={`transition-transform ${grupoAberto ? "rotate-180" : ""}`}>▾</span>
                   </button>
+                                    {grupoAberto && (
+                    <div className="px-3 pt-3">
+                      {(racaItens[raca.id] ?? [])
+                        .filter((i) => i.grupo === grupo)
+                        .map((item) => (
+                          <ItemForm
+                            key={item.id}
+                            tenantId={tenantId}
+                            item={item}
+                            expandido={itensExpandidos.has(item.id)}
+                            onToggleExpandir={() => toggleItemExpandido(item.id)}
+                            mostrarInclui={grupo === "combo"}
+                            mostrarBanhoBase={grupo === "principal"}
+                            tiposTosa={tiposTosa}
+                            onChange={(campo, valor) => atualizarItemRacaLocal(raca.id, item.id, campo, valor)}
+                            onSalvar={() => salvarItemRaca(raca.id, item.id)}
+                            onRemover={() => removerItemRaca(raca.id, item.id)}
+                          />
+                        ))}
+                                            <button
+                        onClick={() => adicionarItemRaca(raca.id, grupo)}
+                        className="w-full border-2 border-dashed border-slate-300 text-blue-600 font-semibold text-sm rounded-lg py-2 mb-3 hover:border-blue-600 hover:bg-blue-50"
+                      >
+                        + Adicionar item
+                                            </button>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
               </>
               )}
             </div>

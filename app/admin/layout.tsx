@@ -57,8 +57,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin" className="px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors">
             📊 Pet Shops
           </Link>
-          <Link href="/admin/suporte" className="px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors">
+                    <Link href="/admin/suporte" className="px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors">
             🎧 Suporte
+          </Link>
+          <Link href="/admin/migracao" className="px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800 transition-colors">
+            📥 Migração
           </Link>
         </nav>
 
