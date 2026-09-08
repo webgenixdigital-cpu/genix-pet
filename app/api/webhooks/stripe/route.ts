@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,7 +64,7 @@ export async function POST(request: NextRequest) {
           .update({ status: 'active', plan_id: planoEncontrado?.id })
           .eq('id', tenantId)
 
-        await supabaseAdmin
+                await supabaseAdmin
           .from('subscriptions')
           .upsert({
             tenant_id: tenantId,
@@ -71,6 +74,23 @@ export async function POST(request: NextRequest) {
             stripe_customer_id: session.customer,
             stripe_subscription_id: session.subscription,
           }, { onConflict: 'tenant_id' })
+      }
+
+      const { data: tenantInfo } = await supabaseAdmin
+        .from('tenants')
+        .select('nome, email')
+        .eq('id', tenantId)
+        .single()
+
+      try {
+        await resend.emails.send({
+          from: 'Genix Pet <onboarding@resend.dev>',
+          to: 'SEU_EMAIL_AQUI@gmail.com',
+          subject: `Nova assinatura: ${tenantInfo?.nome || 'Tenant'} - Plano ${nomesPlano[plano] || plano}`,
+          text: `Novo pagamento confirmado!\n\nTenant: ${tenantInfo?.nome}\nE-mail: ${tenantInfo?.email}\nPlano: ${nomesPlano[plano] || plano}\nValor: R$ ${(session.amount_total / 100).toFixed(2)}\nTipo: ${ehPix ? 'Pix avulso' : 'Assinatura recorrente'}`,
+        })
+      } catch (erroEmail) {
+        console.error('Erro ao enviar e-mail de notificacao:', erroEmail)
       }
     }
   }

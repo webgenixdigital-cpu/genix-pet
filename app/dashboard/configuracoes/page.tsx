@@ -84,8 +84,8 @@ function ConfiguracoesConteudo() {
   const searchParams = useSearchParams()
   const bloqueado = searchParams.get('bloqueado') === '1'
   const bloqueadoPorPlano = searchParams.get('bloqueado') === 'plano'
+  const assinaturaSucesso = searchParams.get('assinatura') === 'sucesso'
   const [carregando, setCarregando] = useState<string | null>(null)
-
   const [secaoAberta, setSecaoAberta] = useState<string | null>(null)
   function toggleSecao(nome: string) {
     setSecaoAberta(prev => prev === nome ? null : nome)
@@ -419,8 +419,18 @@ function ConfiguracoesConteudo() {
     }
   }
 
-  return (
+    return (
     <div className="max-w-2xl">
+      {assinaturaSucesso && (
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <span className="text-2xl">✅</span>
+          <div>
+            <p className="text-sm font-semibold text-green-800">Assinatura confirmada com sucesso!</p>
+            <p className="text-xs text-green-600 mt-0.5">Seu plano já está ativo. Aproveite todos os recursos disponiveis.</p>
+          </div>
+        </div>
+      )}
+
       {bloqueado && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
