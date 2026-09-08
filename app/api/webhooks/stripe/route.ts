@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       try {
         await resend.emails.send({
           from: 'Genix Pet <onboarding@resend.dev>',
-          to: 'SEU_EMAIL_AQUI@gmail.com',
+          to: 'webgenixdigital@gmail.com',
           subject: `Nova assinatura: ${tenantInfo?.nome || 'Tenant'} - Plano ${nomesPlano[plano] || plano}`,
           text: `Novo pagamento confirmado!\n\nTenant: ${tenantInfo?.nome}\nE-mail: ${tenantInfo?.email}\nPlano: ${nomesPlano[plano] || plano}\nValor: R$ ${(session.amount_total / 100).toFixed(2)}\nTipo: ${ehPix ? 'Pix avulso' : 'Assinatura recorrente'}`,
         })

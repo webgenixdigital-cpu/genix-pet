@@ -95,7 +95,38 @@ function Sparkline({ valores, cor = '#2563eb' }: { valores: number[]; cor?: stri
   )
 }
 export default function DashboardPage() {
-  const [tenantNome, setTenantNome] = useState('')
+        const [tenantNome, setTenantNome] = useState('')
+  const [tenantId, setTenantId] = useState('')
+  const [mensalidadeStatus, setMensalidadeStatus] = useState<string | null>(null)
+  const [mensalidadeVenceEm, setMensalidadeVenceEm] = useState<string | null>(null)
+    const [modalPixAberto, setModalPixAberto] = useState(false)
+  const [pixCarregando, setPixCarregando] = useState(false)
+  const [pixQrCode, setPixQrCode] = useState<string | null>(null)
+  const [pixCopiaECola, setPixCopiaECola] = useState<string | null>(null)
+  const [pixErro, setPixErro] = useState<string | null>(null)
+
+  async function gerarPix() {
+    setPixCarregando(true)
+    setPixErro(null)
+    try {
+      const resposta = await fetch('/api/mercadopago/gerar-pix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId }),
+      })
+      const dados = await resposta.json()
+      if (!resposta.ok || !dados.ok) {
+        setPixErro('Nao foi possivel gerar o Pix. Tente novamente.')
+      } else {
+        setPixQrCode(dados.qrCodeBase64)
+        setPixCopiaECola(dados.pixCopiaECola)
+      }
+    } catch {
+      setPixErro('Erro de conexao. Tente novamente.')
+    } finally {
+      setPixCarregando(false)
+    }
+  }
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
   const [receitaHistorico, setReceitaHistorico] = useState<number[]>([])
   const [receita30Dias, setReceita30Dias] = useState<number[]>([])
@@ -126,7 +157,7 @@ export default function DashboardPage() {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('id, nome')
+      .select('id, nome, mensalidade_status, mensalidade_vence_em')
       .eq('email', user.email)
       .single()
 
@@ -134,7 +165,10 @@ export default function DashboardPage() {
       setCarregando(false)
       return
     }
-    setTenantNome(tenant.nome)
+        setTenantNome(tenant.nome)
+    setTenantId(tenant.id)
+    setMensalidadeStatus(tenant.mensalidade_status)
+    setMensalidadeVenceEm(tenant.mensalidade_vence_em)
 
     const ontem = formatarDataISO(new Date(Date.now() - 24 * 60 * 60 * 1000))
 
@@ -402,6 +436,17 @@ const pendencias = [
     })
   }
 
+    const hojeISO = new Date()
+  hojeISO.setHours(0, 0, 0, 0)
+  const diasParaVencer = mensalidadeVenceEm
+    ? Math.ceil((new Date(mensalidadeVenceEm + 'T00:00:00').getTime() - hojeISO.getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  const mostrarAvisoVencimento =
+    mensalidadeVenceEm !== null &&
+    mensalidadeStatus !== null &&
+    (mensalidadeStatus === 'atrasado' || (diasParaVencer !== null && diasParaVencer <= 3))
+
   return (
     <div>
       <div className="mb-6">
@@ -412,6 +457,86 @@ const pendencias = [
           {cancelamentos.length > 0 && ` • ${cancelamentos.length} cancelamento(s)`}
         </p>
       </div>
+
+      {mostrarAvisoVencimento && (
+        <div className={`border rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap ${
+          mensalidadeStatus === 'atrasado' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
+        }`}>
+          <div>
+            <p className={`text-sm font-semibold ${mensalidadeStatus === 'atrasado' ? 'text-red-700' : 'text-yellow-700'}`}>
+              {mensalidadeStatus === 'atrasado'
+                ? 'Sua mensalidade esta atrasada'
+                : `Sua mensalidade vence em ${diasParaVencer} dia(s)`}
+            </p>
+            <p className={`text-xs mt-0.5 ${mensalidadeStatus === 'atrasado' ? 'text-red-500' : 'text-yellow-600'}`}>
+              Renove agora via Pix para evitar interrupcao no acesso.
+            </p>
+          </div>
+                    <button
+            onClick={() => { setModalPixAberto(true); gerarPix() }}
+            className={`text-xs font-medium px-4 py-2 rounded-lg text-white whitespace-nowrap ${
+              mensalidadeStatus === 'atrasado' ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-600 hover:bg-yellow-700'
+            }`}
+          >
+            Pagar com Pix
+          </button>
+        </div>
+      )}
+
+      {modalPixAberto && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Pagamento via Pix</h3>
+              <button
+                onClick={() => { setModalPixAberto(false); setPixQrCode(null); setPixCopiaECola(null); setPixErro(null) }}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {pixCarregando && (
+              <p className="text-sm text-gray-500 py-8">Gerando cobranca Pix...</p>
+            )}
+
+            {pixErro && (
+              <div>
+                <p className="text-sm text-red-600 py-4">{pixErro}</p>
+                <button
+                  onClick={gerarPix}
+                  className="text-sm text-blue-600 underline"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
+            {pixQrCode && !pixCarregando && (
+              <div>
+                <img
+                  src={`data:image/png;base64,${pixQrCode}`}
+                  alt="QR Code Pix"
+                  className="mx-auto w-48 h-48 mb-4"
+                />
+                <p className="text-xs text-gray-500 mb-2">Ou copie o codigo Pix:</p>
+                <div className="bg-gray-50 rounded-lg p-2 text-xs text-gray-600 break-all mb-3">
+                  {pixCopiaECola}
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(pixCopiaECola || ''); }}
+                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Copiar codigo
+                </button>
+                <p className="text-xs text-gray-400 mt-4">
+                  Apos o pagamento, a liberacao e automatica em ate 1 minuto.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {alertas.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">

@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/lembretes",
-      "schedule": "0 15 * * *"
+      "path": "/api/cron/verificar-mensalidades",
+      "schedule": "0 9 * * *"
     }
   ]
 }
