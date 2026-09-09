@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         payer: {
           email: tenant.email,
         },
-        notification_url: 'https://genixpet.com.br/api/webhooks/mercadopago',
+                notification_url: 'https://www.genixpet.com.br/api/webhooks/mercadopago',
         metadata: {
           tenant_id: tenantId,
           plano: planoEscolhido || null,
