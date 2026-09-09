@@ -982,7 +982,7 @@ export default function AgendaPage() {
               </div>
             )}
 
-            <div className="flex flex-col gap-3 text-sm">
+                        <div className="flex flex-col gap-3 text-sm">
               <div>
                 <p className="text-xs text-gray-400">Cliente</p>
                 <p className="text-gray-900">{infoAberto.customers?.nome}</p>
@@ -994,6 +994,24 @@ export default function AgendaPage() {
               <div>
                 <p className="text-xs text-gray-400">Pet</p>
                 <p className="text-gray-900">{infoAberto.pets?.nome}</p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-400">Servico</p>
+                  <button
+                    onClick={() => { abrirEditarServico(infoAberto); setInfoAberto(null) }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    ✏️ Editar servicos
+                  </button>
+                </div>
+                <p className="text-gray-900">{infoAberto.observacoes || '-'}</p>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-400">Profissional</p>
+                <p className="text-gray-900">{infoAberto.professionals?.nome || 'Nao definido'}</p>
               </div>
 
               {infoAberto.status === 'em_espera' ? (
@@ -1032,6 +1050,87 @@ export default function AgendaPage() {
                 </div>
               )}
 
+              <div className="flex items-center justify-center gap-3 py-1">
+                <button
+                  onClick={() => { setTicketAberto(infoAberto); setInfoAberto(null) }}
+                  title="Imprimir ticket"
+                  className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 9V4a1 1 0 011-1h10a1 1 0 011 1v5" />
+                    <path d="M6 18h12a1 1 0 001-1v-5a2 2 0 00-2-2H7a2 2 0 00-2 2v5a1 1 0 001 1z" />
+                    <path d="M8 18v3a1 1 0 001 1h6a1 1 0 001-1v-3" />
+                    <line x1="9" y1="12" x2="15" y2="12" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => { abrirReagendar(infoAberto); setInfoAberto(null) }}
+                  title="Reagendar"
+                  className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 0115.3-6.3L21 8" />
+                    <path d="M21 3v5h-5" />
+                    <path d="M21 12a9 9 0 01-15.3 6.3L3 16" />
+                    <path d="M3 21v-5h5" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => enviarLembreteRapido(infoAberto)}
+                  title="Lembrete WhatsApp"
+                  className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
+                  </svg>
+                </button>
+              </div>
+
+              {infoAberto.precisa_transporte && (
+                <div className="border border-gray-200 rounded-lg">
+                  <button
+                    onClick={() => setMostrarTransporteModal(!mostrarTransporteModal)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left"
+                  >
+                    <span className="text-xs font-medium text-gray-700">🚐 Endereco de transporte</span>
+                    <span className="text-xs text-gray-400">{mostrarTransporteModal ? '▲' : '▼'}</span>
+                  </button>
+                  {mostrarTransporteModal && (
+                    <div className="px-3 pb-3 flex flex-col gap-2">
+                      <div>
+                        <p className="text-xs text-gray-400">Endereco de coleta</p>
+                        <p className="text-gray-900 text-sm">{infoAberto.endereco_coleta}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Endereco de entrega</p>
+                        <p className="text-gray-900 text-sm">{infoAberto.endereco_entrega}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="border border-gray-200 rounded-lg">
+                <button
+                  onClick={() => setMostrarObsModal(!mostrarObsModal)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left"
+                >
+                  <span className="text-xs font-medium text-gray-700">📝 Observacoes</span>
+                  <span className="text-xs text-gray-400">{mostrarObsModal ? '▲' : '▼'}</span>
+                </button>
+                {mostrarObsModal && (
+                  <div className="px-3 pb-3">
+                    <textarea
+                      value={notasInternas}
+                      onChange={e => setNotasInternas(e.target.value)}
+                      placeholder="Adicione uma observacao (alergia, cirurgia recente, sem perfume, etc)..."
+                      rows={3}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <p className="text-xs text-gray-400">Valor</p>
                 <div className="flex items-center justify-between">
@@ -1062,93 +1161,6 @@ export default function AgendaPage() {
                   </button>
                 </div>
               )}
-
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-400">Servicos</p>
-                  <button
-                    onClick={() => { abrirEditarServico(infoAberto); setInfoAberto(null) }}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    ✏️ Editar servicos
-                  </button>
-                </div>
-                <p className="text-gray-900">{infoAberto.observacoes || '-'}</p>
-              </div>
-
-              <div>
-                <p className="text-xs text-gray-400">Profissional</p>
-                <p className="text-gray-900">{infoAberto.professionals?.nome || 'Nao definido'}</p>
-              </div>
-
-              {infoAberto.precisa_transporte && (
-                <div className="border border-gray-200 rounded-lg">
-                  <button
-                    onClick={() => setMostrarTransporteModal(!mostrarTransporteModal)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-left"
-                  >
-                    <span className="text-xs font-medium text-gray-700">🚐 Endereco de transporte</span>
-                    <span className="text-xs text-gray-400">{mostrarTransporteModal ? '▲' : '▼'}</span>
-                  </button>
-                  {mostrarTransporteModal && (
-                    <div className="px-3 pb-3 flex flex-col gap-2">
-                      <div>
-                        <p className="text-xs text-gray-400">Endereco de coleta</p>
-                        <p className="text-gray-900 text-sm">{infoAberto.endereco_coleta}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400">Endereco de entrega</p>
-                        <p className="text-gray-900 text-sm">{infoAberto.endereco_entrega}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  onClick={() => { setTicketAberto(infoAberto); setInfoAberto(null) }}
-                  title="Imprimir ticket"
-                  className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
-                >
-                  🎫
-                </button>
-                <button
-                  onClick={() => { abrirReagendar(infoAberto); setInfoAberto(null) }}
-                  title="Reagendar"
-                  className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
-                >
-                  🔄
-                </button>
-                <button
-                  onClick={() => enviarLembreteRapido(infoAberto)}
-                  title="Lembrete WhatsApp"
-                  className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-sm hover:bg-gray-50 transition-colors"
-                >
-                  💬
-                </button>
-              </div>
-
-              <div className="border border-gray-200 rounded-lg">
-                <button
-                  onClick={() => setMostrarObsModal(!mostrarObsModal)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-left"
-                >
-                  <span className="text-xs font-medium text-gray-700">📝 Observacoes</span>
-                  <span className="text-xs text-gray-400">{mostrarObsModal ? '▲' : '▼'}</span>
-                </button>
-                {mostrarObsModal && (
-                  <div className="px-3 pb-3">
-                    <textarea
-                      value={notasInternas}
-                      onChange={e => setNotasInternas(e.target.value)}
-                      placeholder="Adicione uma observacao (alergia, cirurgia recente, sem perfume, etc)..."
-                      rows={3}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="flex gap-3 mt-5">

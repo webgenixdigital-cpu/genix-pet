@@ -14,9 +14,9 @@ export async function GET(request: NextRequest) {
 
   const hoje = new Date().toISOString().split('T')[0]
 
-  const { data: atrasados, error } = await supabaseAdmin
+    const { data: atrasados, error } = await supabaseAdmin
     .from('tenants')
-    .update({ mensalidade_status: 'atrasado' })
+    .update({ mensalidade_status: 'atrasado', status: 'inadimplente' })
     .lt('mensalidade_vence_em', hoje)
     .not('mensalidade_vence_em', 'is', null)
     .neq('mensalidade_status', 'atrasado')

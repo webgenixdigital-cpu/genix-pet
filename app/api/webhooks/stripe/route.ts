@@ -98,10 +98,19 @@ export async function POST(request: NextRequest) {
   if (event.type === 'customer.subscription.deleted') {
     const subscription = event.data.object as any
 
-    await supabaseAdmin
+    const { data: assinaturaCancelada } = await supabaseAdmin
       .from('subscriptions')
       .update({ status: 'cancelled' })
       .eq('stripe_subscription_id', subscription.id)
+      .select('tenant_id')
+      .single()
+
+    if (assinaturaCancelada?.tenant_id) {
+      await supabaseAdmin
+        .from('tenants')
+        .update({ status: 'cancelled' })
+        .eq('id', assinaturaCancelada.tenant_id)
+    }
   }
 
   return NextResponse.json({ received: true })

@@ -79,7 +79,7 @@ export default function AdminPage() {
   const mrrEstimado = tenants
     .filter(t => t.status === 'active')
     .reduce((s, t) => {
-      const precos: Record<string, number> = { Starter: 89.9, Premium: 189.9, Pro: 349.9 }
+            const precos: Record<string, number> = { Starter: 179.90, Premium: 247.90, Pro: 379.90 }
       return s + (precos[t.plano] || 0)
     }, 0)
 
