@@ -56,20 +56,41 @@ export async function POST(request: NextRequest) {
     })
     const pagamento = await resposta.json()
 
-    if (pagamento.status === 'approved') {
+        if (pagamento.status === 'approved') {
       const tenantId = pagamento.metadata?.tenant_id
+      const planoMetadata = pagamento.metadata?.plano
 
       if (tenantId) {
         const novoVencimento = new Date()
         novoVencimento.setDate(novoVencimento.getDate() + 30)
 
+        const nomesPlano: Record<string, string> = {
+          starter: 'Starter',
+          premium: 'Premium',
+          pro: 'Pro',
+        }
+
+        const atualizacao: Record<string, any> = {
+          mensalidade_status: 'em_dia',
+          mensalidade_vence_em: novoVencimento.toISOString().split('T')[0],
+          status: 'active',
+        }
+
+        if (planoMetadata && nomesPlano[planoMetadata]) {
+          const { data: planoEncontrado } = await supabaseAdmin
+            .from('plans')
+            .select('id')
+            .eq('nome', nomesPlano[planoMetadata])
+            .single()
+
+          if (planoEncontrado) {
+            atualizacao.plan_id = planoEncontrado.id
+          }
+        }
+
         await supabaseAdmin
           .from('tenants')
-          .update({
-            mensalidade_status: 'em_dia',
-            mensalidade_vence_em: novoVencimento.toISOString().split('T')[0],
-            status: 'active',
-          })
+          .update(atualizacao)
           .eq('id', tenantId)
       }
     }

@@ -82,11 +82,17 @@ function SecaoRetravel({
 
 function ConfiguracoesConteudo() {
   const searchParams = useSearchParams()
-  const bloqueado = searchParams.get('bloqueado') === '1'
+  const bloqueado = searchParams.get('bloqueado') === '1' || searchParams.get('testeplanos') === '1'
   const bloqueadoPorPlano = searchParams.get('bloqueado') === 'plano'
   const assinaturaSucesso = searchParams.get('assinatura') === 'sucesso'
-  const [carregando, setCarregando] = useState<string | null>(null)
+    const [carregando, setCarregando] = useState<string | null>(null)
   const [secaoAberta, setSecaoAberta] = useState<string | null>(null)
+    const [modalPixAberto, setModalPixAberto] = useState(false)
+  const [pixCarregando, setPixCarregando] = useState(false)
+  const [pixQrCode, setPixQrCode] = useState<string | null>(null)
+  const [pixCopiaECola, setPixCopiaECola] = useState<string | null>(null)
+  const [pixErro, setPixErro] = useState<string | null>(null)
+  const [pixPlanoAtual, setPixPlanoAtual] = useState('')
   function toggleSecao(nome: string) {
     setSecaoAberta(prev => prev === nome ? null : nome)
   }
@@ -400,22 +406,28 @@ function ConfiguracoesConteudo() {
     }
   }
 
-  async function assinarComPix(plano: string) {
-    setCarregando(plano + '-pix')
-
-    const res = await fetch('/api/checkout-pix', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plano }),
-    })
-
-    const data = await res.json()
-
-    if (data.url) {
-      window.location.href = data.url
-    } else {
-      alert('Erro ao iniciar checkout: ' + (data.error || 'desconhecido'))
-      setCarregando(null)
+        async function assinarComPix(plano: string) {
+    setPixPlanoAtual(plano)
+    setModalPixAberto(true)
+    setPixCarregando(true)
+    setPixErro(null)
+    try {
+      const res = await fetch('/api/mercadopago/gerar-pix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plano }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        setPixErro('Nao foi possivel gerar o Pix. Tente novamente.')
+      } else {
+        setPixQrCode(data.qrCodeBase64)
+        setPixCopiaECola(data.pixCopiaECola)
+      }
+    } catch {
+      setPixErro('Erro de conexao. Tente novamente.')
+    } finally {
+      setPixCarregando(false)
     }
   }
 
@@ -458,14 +470,22 @@ function ConfiguracoesConteudo() {
                       </li>
                     ))}
                   </ul>
-                                    {p.disponivel ? (
-                    <button
-                      onClick={() => assinar(p.id)}
-                      disabled={carregando === p.id}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {carregando === p.id ? 'Redirecionando...' : 'Assinar este plano'}
-                    </button>
+                                                                       {p.disponivel ? (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => assinar(p.id)}
+                        disabled={carregando === p.id}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {carregando === p.id ? 'Redirecionando...' : 'Assinar com Cartao'}
+                      </button>
+                                            <button
+                        onClick={() => assinarComPix(p.id)}
+                        className="w-full border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs py-2 rounded-lg transition-colors"
+                      >
+                        Pagar com Pix
+                      </button>
+                    </div>
                   ) : (
                     <button
                       disabled
@@ -477,6 +497,58 @@ function ConfiguracoesConteudo() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {modalPixAberto && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Pagamento via Pix</h3>
+              <button
+                onClick={() => { setModalPixAberto(false); setPixQrCode(null); setPixCopiaECola(null); setPixErro(null) }}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {pixCarregando && (
+              <p className="text-sm text-gray-500 py-8">Gerando cobranca Pix...</p>
+            )}
+
+            {pixErro && (
+              <div>
+                <p className="text-sm text-red-600 py-4">{pixErro}</p>
+                                <button onClick={() => assinarComPix(pixPlanoAtual)} className="text-sm text-blue-600 underline">
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
+            {pixQrCode && !pixCarregando && (
+              <div>
+                <img
+                  src={`data:image/png;base64,${pixQrCode}`}
+                  alt="QR Code Pix"
+                  className="mx-auto w-48 h-48 mb-4"
+                />
+                <p className="text-xs text-gray-500 mb-2">Ou copie o codigo Pix:</p>
+                <div className="bg-gray-50 rounded-lg p-2 text-xs text-gray-600 break-all mb-3">
+                  {pixCopiaECola}
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(pixCopiaECola || ''); }}
+                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Copiar codigo
+                </button>
+                <p className="text-xs text-gray-400 mt-4">
+                  Apos o pagamento, a liberacao e automatica em ate 1 minuto.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -516,14 +588,22 @@ function ConfiguracoesConteudo() {
                   </li>
                 ))}
               </ul>
-                                           {p.disponivel ? (
-                <button
-                  onClick={() => assinar(p.id)}
-                  disabled={carregando === p.id}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {carregando === p.id ? 'Redirecionando...' : 'Assinar'}
-                </button>
+                                                                              {p.disponivel ? (
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => assinar(p.id)}
+                    disabled={carregando === p.id}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {carregando === p.id ? 'Redirecionando...' : 'Assinar com Cartao'}
+                  </button>
+                  <button
+                    onClick={() => assinarComPix(p.id)}
+                    className="w-full border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs py-2 rounded-lg transition-colors"
+                  >
+                    Pagar com Pix
+                  </button>
+                </div>
               ) : (
                 <button
                   disabled
