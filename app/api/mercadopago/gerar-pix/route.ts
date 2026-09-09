@@ -58,14 +58,15 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'X-Idempotency-Key': `${tenantId}-${Date.now()}`,
       },
-      body: JSON.stringify({
+            body: JSON.stringify({
         transaction_amount: valor,
         description: `Mensalidade Genix Pet - ${tenant.nome}`,
         payment_method_id: 'pix',
         payer: {
           email: tenant.email,
         },
-                metadata: {
+        notification_url: 'https://genixpet.com.br/api/webhooks/mercadopago',
+        metadata: {
           tenant_id: tenantId,
           plano: planoEscolhido || null,
         },
