@@ -64,10 +64,11 @@ export async function POST(request: NextRequest) {
         const novoVencimento = new Date()
         novoVencimento.setDate(novoVencimento.getDate() + 30)
 
-        const nomesPlano: Record<string, string> = {
+                const nomesPlano: Record<string, string> = {
           starter: 'Starter',
           premium: 'Premium',
           pro: 'Pro',
+          catalogo: 'Catalogo',
         }
 
         const atualizacao: Record<string, any> = {

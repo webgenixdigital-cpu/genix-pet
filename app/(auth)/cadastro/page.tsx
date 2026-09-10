@@ -1,10 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function CadastroPage() {
+const PLANO_CATALOGO_ID = '8d0041ce-bbf8-457c-898c-6778509bc0d9'
+
+function CadastroConteudo() {
+  const searchParams = useSearchParams()
+  const produtoCatalogo = searchParams.get('produto') === 'catalogo'
   const [nome, setNome] = useState('')
   const [slug, setSlug] = useState('')
   const [email, setEmail] = useState('')
@@ -46,9 +50,18 @@ export default function CadastroPage() {
       return
     }
 
+        const dadosTenant: Record<string, any> = { nome, slug, email, status: 'trial' }
+
+    if (produtoCatalogo) {
+      const seteDias = new Date()
+      seteDias.setDate(seteDias.getDate() + 7)
+      dadosTenant.trial_termina_em = seteDias.toISOString().split('T')[0]
+      dadosTenant.plan_id = PLANO_CATALOGO_ID
+    }
+
     const { error: tenantError } = await supabase
       .from('tenants')
-      .insert({ nome, slug, email, status: 'trial' })
+      .insert(dadosTenant)
 
     if (tenantError) {
       setErro('Erro ao cadastrar pet shop: ' + tenantError.message)
@@ -63,7 +76,9 @@ export default function CadastroPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 w-full max-w-md">
         <h1 className="text-2xl font-semibold text-gray-900 mb-1">Genix Pet</h1>
-        <p className="text-gray-500 text-sm mb-8">Cadastre seu pet shop — 15 dias gratis</p>
+                <p className="text-gray-500 text-sm mb-8">
+          Cadastre seu pet shop — {produtoCatalogo ? '7 dias gratis (Catalogo Digital)' : '15 dias gratis'}
+        </p>
 
         <div className="flex flex-col gap-4">
           <div>
@@ -128,7 +143,7 @@ export default function CadastroPage() {
             {carregando ? 'Cadastrando...' : 'Criar conta gratis'}
           </button>
 
-          <p className="text-center text-sm text-gray-500">
+                    <p className="text-center text-sm text-gray-500">
             ja tem conta?{' '}
             <a href="/login" className="text-blue-600 hover:underline">
               Entrar
@@ -137,5 +152,13 @@ export default function CadastroPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CadastroPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-sm text-gray-400">Carregando...</div>}>
+      <CadastroConteudo />
+    </Suspense>
   )
 }

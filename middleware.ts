@@ -59,23 +59,36 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=1', request.url))
       }
 
-      if (tenant.plan_id && tenant.status !== 'trial') {
+            if (tenant.plan_id && tenant.status !== 'trial') {
         const { data: plano } = await supabase
           .from('plans')
-          .select('tem_catalogo_produtos, tem_modulo_financeiro, tem_whatsapp')
+          .select('tem_catalogo_produtos, tem_modulo_financeiro, tem_whatsapp, apenas_catalogo')
           .eq('id', tenant.plan_id)
           .single()
 
         if (plano) {
-          const rotaProdutos = request.nextUrl.pathname.startsWith('/dashboard/produtos')
-          const rotaPacotes = request.nextUrl.pathname.startsWith('/dashboard/pacotes')
-          const rotaFinanceiro = request.nextUrl.pathname.startsWith('/dashboard/financeiro')
+          const rotasPermitidasApenasCatalogo = [
+            '/dashboard/catalogo',
+            '/dashboard/configuracoes',
+            '/dashboard/suporte',
+          ]
 
-          if (rotaProdutos && !plano.tem_catalogo_produtos) {
-            return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=plano', request.url))
-          }
-          if ((rotaPacotes || rotaFinanceiro) && !plano.tem_modulo_financeiro) {
-            return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=plano', request.url))
+          if (plano.apenas_catalogo) {
+            const rotaPermitida = rotasPermitidasApenasCatalogo.some(r => request.nextUrl.pathname.startsWith(r))
+            if (!rotaPermitida) {
+              return NextResponse.redirect(new URL('/dashboard/catalogo', request.url))
+            }
+          } else {
+            const rotaProdutos = request.nextUrl.pathname.startsWith('/dashboard/produtos')
+            const rotaPacotes = request.nextUrl.pathname.startsWith('/dashboard/pacotes')
+            const rotaFinanceiro = request.nextUrl.pathname.startsWith('/dashboard/financeiro')
+
+            if (rotaProdutos && !plano.tem_catalogo_produtos) {
+              return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=plano', request.url))
+            }
+            if ((rotaPacotes || rotaFinanceiro) && !plano.tem_modulo_financeiro) {
+              return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=plano', request.url))
+            }
           }
         }
       }

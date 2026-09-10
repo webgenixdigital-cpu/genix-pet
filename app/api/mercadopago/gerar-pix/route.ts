@@ -11,6 +11,7 @@ const NOMES_PLANO: Record<string, string> = {
   starter: 'Starter',
   premium: 'Premium',
   pro: 'Pro',
+  catalogo: 'Catalogo',
 }
 
 export async function POST(request: NextRequest) {

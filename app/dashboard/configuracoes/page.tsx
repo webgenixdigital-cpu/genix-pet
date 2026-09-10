@@ -16,10 +16,16 @@ const PLANOS = [
     itens: ['Tudo do Starter', 'Catalogo digital publico com link proprio', 'Agendamento online direto pelo catalogo', 'Pagamento via Pix no agendamento', 'Controle de estoque avancado'],
     disponivel: true,
   },
-  {
+    {
     id: 'pro', nome: 'Pro', preco: 'R$ 379,90', desc: 'Ate 10 profissionais',
     itens: ['Tudo do Premium', 'WhatsApp automatico (lembretes, pos-venda, prospeccao)', 'Busca automatica de produtos (NF-e / codigo de barras)', 'Suporte prioritario'],
     disponivel: false,
+  },
+  {
+    id: 'catalogo', nome: 'Catalogo', preco: 'R$ 42,90', desc: 'Ideal para quem ja usa outro sistema',
+    itens: ['Catalogo digital publico com link proprio', 'Cliente escolhe raca, porte e pelagem', 'Pedido de agendamento direto pelo WhatsApp', 'Edite racas, servicos e precos quando quiser'],
+    disponivel: true,
+    somentePix: true,
   },
 ]
 
@@ -92,7 +98,9 @@ function ConfiguracoesConteudo() {
   const [pixQrCode, setPixQrCode] = useState<string | null>(null)
   const [pixCopiaECola, setPixCopiaECola] = useState<string | null>(null)
   const [pixErro, setPixErro] = useState<string | null>(null)
-  const [pixPlanoAtual, setPixPlanoAtual] = useState('')
+    const [pixPlanoAtual, setPixPlanoAtual] = useState('')
+  const [mensalidadeStatus, setMensalidadeStatus] = useState<string | null>(null)
+  const [mensalidadeVenceEm, setMensalidadeVenceEm] = useState<string | null>(null)
   function toggleSecao(nome: string) {
     setSecaoAberta(prev => prev === nome ? null : nome)
   }
@@ -136,9 +144,9 @@ function ConfiguracoesConteudo() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-                  const { data } = await supabase
+                                    const { data } = await supabase
         .from('tenants')
-        .select('id, zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id, preco_por_km, valor_minimo_transporte, chave_pix, mensagens_personalizadas')
+        .select('id, zapi_instance_id, zapi_token, whatsapp_conectado, logo_url, cor_primaria, plan_id, preco_por_km, valor_minimo_transporte, chave_pix, mensagens_personalizadas, mensalidade_status, mensalidade_vence_em')
         .eq('email', user.email)
         .single()
 
@@ -150,7 +158,9 @@ function ConfiguracoesConteudo() {
         setCorPrimaria(data.cor_primaria || '#1a56db')
         setPrecoPorKm(data.preco_por_km?.toString() || '')
         setValorMinimoTransporte(data.valor_minimo_transporte?.toString() || '5.00')
-        setChavePix(data.chave_pix || '')
+                setChavePix(data.chave_pix || '')
+        setMensalidadeStatus(data.mensalidade_status || null)
+        setMensalidadeVenceEm(data.mensalidade_vence_em || null)
 
         const msgs = data.mensagens_personalizadas || {}
         setMsgLembrete(msgs.lembrete || MENSAGENS_PADRAO.lembrete)
@@ -471,21 +481,23 @@ function ConfiguracoesConteudo() {
                     ))}
                   </ul>
                                                                        {p.disponivel ? (
-                    <div className="flex flex-col gap-2">
+                                      <div className="flex flex-col gap-2">
+                      {!p.somentePix && (
+                        <button
+                          onClick={() => assinar(p.id)}
+                          disabled={carregando === p.id}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {carregando === p.id ? 'Redirecionando...' : 'Assinar com Cartao'}
+                        </button>
+                      )}
                       <button
-                        onClick={() => assinar(p.id)}
-                        disabled={carregando === p.id}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {carregando === p.id ? 'Redirecionando...' : 'Assinar com Cartao'}
-                      </button>
-                                            <button
                         onClick={() => assinarComPix(p.id)}
                         className="w-full border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs py-2 rounded-lg transition-colors"
                       >
                         Pagar com Pix
                       </button>
-                    </div>
+                    </div>  
                   ) : (
                     <button
                       disabled
@@ -589,14 +601,16 @@ function ConfiguracoesConteudo() {
                 ))}
               </ul>
                                                                               {p.disponivel ? (
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => assinar(p.id)}
-                    disabled={carregando === p.id}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {carregando === p.id ? 'Redirecionando...' : 'Assinar com Cartao'}
-                  </button>
+                                <div className="flex flex-col gap-2">
+                  {!p.somentePix && (
+                    <button
+                      onClick={() => assinar(p.id)}
+                      disabled={carregando === p.id}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {carregando === p.id ? 'Redirecionando...' : 'Assinar com Cartao'}
+                    </button>
+                  )}
                   <button
                     onClick={() => assinarComPix(p.id)}
                     className="w-full border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs py-2 rounded-lg transition-colors"

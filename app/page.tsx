@@ -44,7 +44,7 @@ const PLANOS = [
       'Controle de estoque avançado',
     ],
   },
-  {
+    {
     nome: 'Pro',
     preco: '379,90',
     desc: 'Até 10 profissionais',
@@ -56,6 +56,19 @@ const PLANOS = [
       'WhatsApp automático (lembretes, pós-venda, prospecção)',
       'Busca automática de produtos (NF-e / código de barras)',
       'Suporte prioritário',
+    ],
+  },
+  {
+    nome: 'Catálogo',
+    preco: '42,90',
+    desc: 'Ideal para quem já usa outro sistema',
+    destaque: false,
+    disponivel: true,
+    itens: [
+      'Catálogo digital público com link próprio',
+      'Cliente escolhe raça, porte e pelagem',
+      'Pedido de agendamento direto pelo WhatsApp',
+      'Edite raças, serviços e preços quando quiser',
     ],
   },
 ]
@@ -688,8 +701,12 @@ export default function LandingPage() {
                 ))}
               </ul>
 
-                            {plano.disponivel ? (
-                <Botao>{CTA_TEXTO}</Botao>
+                                                        {plano.disponivel ? (
+                plano.nome === 'Catálogo' ? (
+                  <Botao href="/cadastro?produto=catalogo">Teste Grátis por 7 Dias</Botao>
+                ) : (
+                  <Botao>{CTA_TEXTO}</Botao>
+                )
               ) : (
                 <span className="inline-block bg-gray-100 text-gray-400 font-bold px-7 py-3.5 rounded-lg text-base cursor-not-allowed">
                   Em breve
