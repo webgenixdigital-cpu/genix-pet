@@ -237,13 +237,13 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
     let total = 0;
     let origem = "";
 
-    if (tipo === "raca" && racaSelecionada) {
-      itensTexto = resumoRaca.selecionados.map((s) => `• ${s.nome} — ${fmtMoeda(s.preco)}`).join("\n");
+        if (tipo === "raca" && racaSelecionada) {
+      itensTexto = resumoRaca.selecionados.map((s) => `• ${s.nome} — *${fmtMoeda(s.preco)}*`).join("\n");
       total = resumoRaca.total;
       origem = `Raça: ${racaSelecionada.nome}`;
     } else if (tipo === "porte" && porteSelecionado && pelagemSelecionada) {
       itensTexto = resumoPorte.selecionados
-        .map((i) => `• ${i.nome} — ${fmtMoeda(i.precoPorPorte[porteSelecionado.id] ?? 0)}`)
+        .map((i) => `• ${i.nome} — *${fmtMoeda(i.precoPorPorte[porteSelecionado.id] ?? 0)}*`)
         .join("\n");
       total = resumoPorte.total;
       origem = `Porte: ${porteSelecionado.nome} · Pelagem: ${pelagemSelecionada.nome}`;
@@ -256,17 +256,18 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
     const transporteTexto = precisaTransporte === true ? "Sim, preciso de transporte (leva e traz)" : "Não, vou levar/buscar meu pet";
 
     const linhas: string[] = [];
-    linhas.push("Olá! Gostaria de agendar os seguintes serviços:");
+    linhas.push("Olá! Gostaria de agendar um atendimento 🐾");
     linhas.push("");
-    if (nomeCliente) linhas.push(`Cliente: ${nomeCliente}`);
-    if (nomePetSelecionado) linhas.push(`Pet: ${nomePetSelecionado}`);
-    linhas.push(`Perfil: ${origem}`);
+    linhas.push("*Dados do agendamento*");
+    if (nomeCliente) linhas.push(`👤 Cliente: ${nomeCliente}`);
+    if (nomePetSelecionado) linhas.push(`🐶 Pet: ${nomePetSelecionado}`);
+    linhas.push(`📋 Perfil: ${origem}`);
     linhas.push("");
-    linhas.push("Serviços:");
+    linhas.push("*Serviços selecionados*");
     linhas.push(itensTexto);
     linhas.push("");
-    linhas.push(`Total estimado: ${fmtMoeda(total)}`);
-    linhas.push(`Transporte: ${transporteTexto}`);
+    linhas.push(`💰 *Total estimado:* ${fmtMoeda(total)}`);
+    linhas.push(`🚐 *Transporte:* ${transporteTexto}`);
 
     const mensagemPadrao = linhas.join("\n");
 
