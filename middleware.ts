@@ -59,7 +59,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/dashboard/configuracoes?bloqueado=1', request.url))
       }
 
-            if (tenant.plan_id && tenant.status !== 'trial') {
+                  if (tenant.plan_id) {
         const { data: plano } = await supabase
           .from('plans')
           .select('tem_catalogo_produtos, tem_modulo_financeiro, tem_whatsapp, apenas_catalogo')
@@ -78,7 +78,7 @@ export async function middleware(request: NextRequest) {
             if (!rotaPermitida) {
               return NextResponse.redirect(new URL('/dashboard/catalogo', request.url))
             }
-          } else {
+          } else if (tenant.status !== 'trial') {
             const rotaProdutos = request.nextUrl.pathname.startsWith('/dashboard/produtos')
             const rotaPacotes = request.nextUrl.pathname.startsWith('/dashboard/pacotes')
             const rotaFinanceiro = request.nextUrl.pathname.startsWith('/dashboard/financeiro')

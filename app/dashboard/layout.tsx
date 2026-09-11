@@ -73,7 +73,7 @@ export default function DashboardLayout({
         .eq('email', user.email)
         .single()
 
-                  if (tenant?.status === 'trial') {
+                          if (tenant?.status === 'trial' && !tenant?.plan_id) {
         setPermissoes({
           tem_whatsapp: true,
           tem_catalogo_produtos: true,
