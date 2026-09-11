@@ -465,6 +465,49 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+                </div>
+      </section>
+
+      {/* CATÁLOGO DIGITAL STANDALONE */}
+      <section className="bg-blue-600 py-14 md:py-20">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <span className="inline-block text-[11px] font-bold tracking-widest uppercase text-blue-700 bg-white rounded-full px-3 py-1 mb-5">
+            Já usa outro sistema?
+          </span>
+          <h2 className="text-[26px] md:text-[34px] font-extrabold text-white tracking-tight mb-4">
+            Só o Catálogo Digital, com link próprio para divulgação
+          </h2>
+          <p className="text-blue-100 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Continue usando seu sistema atual e ganhe um link exclusivo para divulgar seus serviços.
+            O cliente escolhe a raça do pet, monta combos e planos, e envia o pedido de
+            agendamento direto no seu WhatsApp.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+            {[
+              { texto: 'Raças definidas com busca rápida', icone: 'pet' },
+              { texto: 'Combos e planos personalizados', icone: 'kanban' },
+              { texto: 'Serviços adicionais configuráveis', icone: 'grafico' },
+              { texto: 'Pedido direto no WhatsApp', icone: 'whatsapp' },
+            ].map(i => (
+              <div
+                key={i.texto}
+                className="bg-white/10 border border-white/20 rounded-2xl p-5 flex flex-col items-center gap-3 text-center"
+              >
+                <span className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-white text-blue-600 flex-shrink-0">
+                  {Icones[i.icone as keyof typeof Icones]()}
+                </span>
+                <p className="text-sm text-white font-medium">{i.texto}</p>
+              </div>
+            ))}
+          </div>
+
+          <Link
+            href="/cadastro?produto=catalogo"
+            className="inline-block bg-white hover:bg-blue-50 text-blue-700 font-bold px-7 py-3.5 rounded-lg transition-colors text-base"
+          >
+            Teste Grátis por 7 Dias
+          </Link>
         </div>
       </section>
 
