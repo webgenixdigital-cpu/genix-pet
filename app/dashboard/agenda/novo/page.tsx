@@ -299,7 +299,7 @@ export default function AgendarPage() {
     carregar()
   }, [slug])
   
-  async function buscarClientePorTelefone(telefoneDigitado: string) {
+    async function buscarClientePorTelefone(telefoneDigitado: string) {
     setClienteExistente(null)
     setPetsDoCliente([])
 
@@ -315,6 +315,28 @@ export default function AgendarPage() {
       .select('id, nome, telefone, pets ( id, nome, especie, porte, raca, pelagem )')
       .eq('tenant_id', tenant.id)
       .ilike('telefone', `%${telefoneDigitado.replace(/\D/g, '')}%`)
+      .limit(6)
+
+    setSugestoesClientes(clientes || [])
+    setBuscandoCliente(false)
+  }
+
+  async function buscarClientePorNome(nomeDigitado: string) {
+    setClienteExistente(null)
+    setPetsDoCliente([])
+
+    if (!tenant || nomeDigitado.trim().length < 3) {
+      setSugestoesClientes([])
+      return
+    }
+
+    setBuscandoCliente(true)
+
+    const { data: clientes } = await supabase
+      .from('customers')
+      .select('id, nome, telefone, pets ( id, nome, especie, porte, raca, pelagem )')
+      .eq('tenant_id', tenant.id)
+      .ilike('nome', `%${nomeDigitado.trim()}%`)
       .limit(6)
 
     setSugestoesClientes(clientes || [])
@@ -982,18 +1004,19 @@ export default function AgendarPage() {
           <div>
             <h2 className="text-sm font-medium text-gray-900 mb-4">Seus dados</h2>
 
-            <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-4">
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">Seu telefone</label>
+                <label className="text-sm text-gray-600 mb-1 block">Nome do cliente</label>
                 <input
                   type="text"
-                  value={telefoneCliente}
+                  value={nomeCliente}
                   onChange={e => {
-                    setTelefoneCliente(e.target.value)
-                    buscarClientePorTelefone(e.target.value)
+                    setNomeCliente(e.target.value)
+                    buscarClientePorNome(e.target.value)
                   }}
-                  placeholder="(35) 99999-9999"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Maria Silva"
+                  disabled={!!clienteExistente}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
                 />
                 {buscandoCliente && <p className="text-xs text-gray-400 mt-1">Verificando...</p>}
 
@@ -1020,12 +1043,12 @@ export default function AgendarPage() {
               </div>
 
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">Seu nome</label>
+                <label className="text-sm text-gray-600 mb-1 block">Telefone</label>
                 <input
                   type="text"
-                  value={nomeCliente}
-                  onChange={e => setNomeCliente(e.target.value)}
-                  placeholder="Maria Silva"
+                  value={telefoneCliente}
+                  onChange={e => setTelefoneCliente(e.target.value)}
+                  placeholder="(35) 99999-9999"
                   disabled={!!clienteExistente}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
                 />

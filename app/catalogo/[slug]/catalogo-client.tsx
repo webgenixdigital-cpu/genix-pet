@@ -41,10 +41,11 @@ function fmtMoeda(v: number) {
 
 export default function CatalogoClient({ dados, portes, pelagens }: Props) {
   const [passo, setPasso] = useState<Passo>("identificacao");
-  const [telefoneCliente, setTelefoneCliente] = useState("");
+    const [telefoneCliente, setTelefoneCliente] = useState("");
   const [nomeCliente, setNomeCliente] = useState("");
   const [clienteReconhecido, setClienteReconhecido] = useState<ClienteReconhecido | null>(null);
   const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [candidatosNome, setCandidatosNome] = useState<ClienteReconhecido[]>([]);
   const [petSelecionadoIdentificado, setPetSelecionadoIdentificado] = useState<string | null>(null);
   const [racaSelecionada, setRacaSelecionada] = useState<Raca | null>(null);
   const [porteSelecionado, setPorteSelecionado] = useState<(typeof portes)[number] | null>(null);
@@ -61,13 +62,38 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
     setPasso(p);
   }
 
-  // -------------------- identificacao do cliente --------------------
-  async function buscarCliente() {
+ // -------------------- identificacao do cliente --------------------
+  async function buscarClientePorNome() {
+    const nomeDigitado = nomeCliente.trim();
+    if (nomeDigitado.length < 3) return;
+
+    setBuscandoCliente(true);
+    setClienteReconhecido(null);
+    setCandidatosNome([]);
+
+    const { data } = await supabasePublico
+      .from("customers")
+      .select("id, nome, telefone, pets ( id, nome, raca, porte )")
+      .eq("tenant_id", dados.tenantId)
+      .ilike("nome", `%${nomeDigitado}%`);
+
+    if (data && data.length === 1) {
+      setClienteReconhecido(data[0] as any);
+      setNomeCliente(data[0].nome);
+    } else if (data && data.length > 1) {
+      setCandidatosNome(data as any);
+    }
+
+    setBuscandoCliente(false);
+  }
+
+  async function buscarClientePorTelefone() {
     const telefoneNumeros = telefoneCliente.replace(/\D/g, "");
     if (telefoneNumeros.length < 8) return;
 
     setBuscandoCliente(true);
     setClienteReconhecido(null);
+    setCandidatosNome([]);
 
     const { data } = await supabasePublico
       .from("customers")
@@ -82,6 +108,12 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
     }
 
     setBuscandoCliente(false);
+  }
+
+  function selecionarCandidatoNome(candidato: ClienteReconhecido) {
+    setClienteReconhecido(candidato);
+    setNomeCliente(candidato.nome);
+    setCandidatosNome([]);
   }
 
     function continuarSemIdentificar() {
@@ -347,15 +379,18 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
             </div>
           )}
 
-                              {passo === "identificacao" && (
+                    {passo === "identificacao" && (
             <StepIdentificacao
               telefone={telefoneCliente}
               nome={nomeCliente}
               onTelefoneChange={setTelefoneCliente}
               onNomeChange={setNomeCliente}
-              onBuscar={buscarCliente}
+              onBuscarNome={buscarClientePorNome}
+              onBuscarTelefone={buscarClientePorTelefone}
               buscando={buscandoCliente}
               clienteReconhecido={clienteReconhecido}
+              candidatosNome={candidatosNome}
+              onSelecionarCandidato={selecionarCandidatoNome}
               onContinuar={continuarComIdentificacao}
               onPular={continuarSemIdentificar}
             />
@@ -448,14 +483,25 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
 // ============================================================
 // Subcomponentes de cada etapa
 // ============================================================
+function mascararTelefone(telefone: string) {
+  const numeros = telefone.replace(/\D/g, "");
+  if (numeros.length < 6) return telefone;
+  const ddd = numeros.slice(0, 2);
+  const finalNumero = numeros.slice(-4);
+  return `(${ddd}) *****-${finalNumero}`;
+}
+
 function StepIdentificacao({
   telefone,
   nome,
   onTelefoneChange,
   onNomeChange,
-  onBuscar,
+  onBuscarNome,
+  onBuscarTelefone,
   buscando,
   clienteReconhecido,
+  candidatosNome,
+  onSelecionarCandidato,
   onContinuar,
   onPular,
 }: {
@@ -463,9 +509,12 @@ function StepIdentificacao({
   nome: string;
   onTelefoneChange: (v: string) => void;
   onNomeChange: (v: string) => void;
-  onBuscar: () => void;
+  onBuscarNome: () => void;
+  onBuscarTelefone: () => void;
   buscando: boolean;
   clienteReconhecido: ClienteReconhecido | null;
+  candidatosNome: ClienteReconhecido[];
+  onSelecionarCandidato: (c: ClienteReconhecido) => void;
   onContinuar: () => void;
   onPular: () => void;
 }) {
@@ -473,24 +522,45 @@ function StepIdentificacao({
     <div>
       <h2 className="text-lg font-bold mb-1">Bem-vindo! 👋</h2>
       <p className="text-sm text-slate-500 mb-5">
-                Informe seu telefone para agilizarmos seu proximo atendimento (opcional). {/* proximo sem acento por padrao do projeto (evita problema de encoding) */}
+        Informe seu nome para agilizarmos seu proximo atendimento (opcional).
       </p>
 
       <div className="mb-4">
-        <label className="text-sm font-semibold mb-1.5 block">Seu telefone</label>
+        <label className="text-sm font-semibold mb-1.5 block">Seu nome</label>
         <input
           type="text"
-          value={telefone}
-          onChange={(e) => onTelefoneChange(e.target.value)}
-          onBlur={onBuscar}
-          placeholder="(35) 99999-9999"
+          value={nome}
+          onChange={(e) => onNomeChange(e.target.value)}
+          onBlur={onBuscarNome}
+          placeholder="Maria Silva"
           className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
           autoFocus
         />
         {buscando && <p className="text-xs text-slate-400 mt-1.5">Verificando...</p>}
       </div>
 
-      {clienteReconhecido ? (
+      {candidatosNome.length > 1 && (
+        <div className="mb-4">
+          <p className="text-sm font-semibold mb-2">Encontramos mais de um cadastro com esse nome. Qual e o seu?</p>
+          <div className="flex flex-col gap-2">
+            {candidatosNome.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => onSelecionarCandidato(c)}
+                className="text-left border-2 border-slate-200 rounded-xl px-4 py-3 text-sm hover:border-blue-600 transition-colors"
+              >
+                <span className="font-medium">{c.nome}</span>
+                <span className="text-slate-400 ml-2">{mascararTelefone(c.telefone)}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            Nenhum desses e voce? Preencha o telefone abaixo para continuar como novo cliente.
+          </p>
+        </div>
+      )}
+
+      {clienteReconhecido && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
           <p className="text-sm font-semibold text-green-800">
             Bem-vindo de volta, {clienteReconhecido.nome}! 🐾
@@ -501,20 +571,20 @@ function StepIdentificacao({
             </p>
           )}
         </div>
-      ) : (
-        telefone.replace(/\D/g, "").length >= 8 &&
-        !buscando && (
-          <div className="mb-4">
-            <label className="text-sm font-semibold mb-1.5 block">Seu nome (opcional)</label>
-            <input
-              type="text"
-              value={nome}
-              onChange={(e) => onNomeChange(e.target.value)}
-              placeholder="Maria Silva"
-              className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
-            />
-          </div>
-        )
+      )}
+
+      {!clienteReconhecido && (
+        <div className="mb-4">
+          <label className="text-sm font-semibold mb-1.5 block">Seu telefone</label>
+          <input
+            type="text"
+            value={telefone}
+            onChange={(e) => onTelefoneChange(e.target.value)}
+            onBlur={onBuscarTelefone}
+            placeholder="(35) 99999-9999"
+            className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
+          />
+        </div>
       )}
 
       <button
