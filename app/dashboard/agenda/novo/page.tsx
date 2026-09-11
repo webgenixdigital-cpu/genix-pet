@@ -1022,14 +1022,14 @@ export default function AgendarPage() {
 
                 {sugestoesClientes.length > 0 && !clienteExistente && (
                   <div className="border border-gray-200 rounded-lg mt-1 overflow-hidden">
-                    {sugestoesClientes.map(c => (
+                                        {sugestoesClientes.map(c => (
                       <button
                         key={c.id}
                         type="button"
                         onClick={() => selecionarClienteExistente(c)}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
                       >
-                        {c.nome} • {c.telefone}
+                        {c.nome}{c.pets?.length > 0 && ` — ${c.pets.map((p: any) => p.nome).join(', ')}`} • {c.telefone}
                       </button>
                     ))}
                   </div>

@@ -543,13 +543,16 @@ function StepIdentificacao({
         <div className="mb-4">
           <p className="text-sm font-semibold mb-2">Encontramos mais de um cadastro com esse nome. Qual e o seu?</p>
           <div className="flex flex-col gap-2">
-            {candidatosNome.map((c) => (
+                        {candidatosNome.map((c) => (
               <button
                 key={c.id}
                 onClick={() => onSelecionarCandidato(c)}
                 className="text-left border-2 border-slate-200 rounded-xl px-4 py-3 text-sm hover:border-blue-600 transition-colors"
               >
                 <span className="font-medium">{c.nome}</span>
+                {c.pets.length > 0 && (
+                  <span className="text-slate-500 ml-2">— {c.pets.map((p) => p.nome).join(", ")}</span>
+                )}
                 <span className="text-slate-400 ml-2">{mascararTelefone(c.telefone)}</span>
               </button>
             ))}
