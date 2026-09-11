@@ -168,8 +168,14 @@ export default function AgendarPage() {
      const [subPassoPet, setSubPassoPet] = useState<'nome' | 'perfil' | 'servicos' | 'plano' | 'confirmado'>('nome')
   const [mostrarFormNovoPet, setMostrarFormNovoPet] = useState(false)
 
-  const [profissionalSelecionado, setProfissionalSelecionado] = useState<Profissional | null>(null)
+    const [profissionalSelecionado, setProfissionalSelecionado] = useState<Profissional | null>(null)
   const [dataSelecionada, setDataSelecionada] = useState<string>('')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const dataUrl = params.get('data')
+    if (dataUrl) setDataSelecionada(dataUrl)
+  }, [])
   const [horariosDisponiveis, setHorariosDisponiveis] = useState<string[]>([])
   const [horarioSelecionado, setHorarioSelecionado] = useState<string>('')
   const [carregandoHorarios, setCarregandoHorarios] = useState(false)

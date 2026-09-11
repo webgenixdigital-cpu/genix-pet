@@ -566,7 +566,7 @@ export default function AgendaPage() {
           <h2 className="text-xl font-semibold text-gray-900">Agenda</h2>
           <p className="text-sm text-gray-500 mt-0.5">Fluxo de trabalho do dia</p>
         </div>
-        <a href="/dashboard/agenda/novo" className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+                <a href={`/dashboard/agenda/novo?data=${dataFiltro}`} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
           + Novo agendamento
         </a>
       </div>
@@ -697,21 +697,32 @@ export default function AgendaPage() {
               const itens = (agendamentosPorDia[dia] || []).filter(a => a.status !== 'cancelado' && a.status !== 'faltou')
               const dataObj = new Date(dia + 'T00:00:00')
               const hoje = dia === formatarDataISO(new Date())
-              return (
-                <button
-                  key={dia}
-                  onClick={() => irParaDia(dia)}
-                  className={`aspect-square rounded-lg border p-2 flex flex-col items-center justify-center transition-colors ${
-                    hoje ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100 hover:border-blue-300'
-                  }`}
-                >
-                  <p className="text-sm font-medium">{dataObj.getDate()}</p>
-                  {itens.length > 0 && (
-                    <span className={`text-[9px] mt-0.5 px-1.5 rounded-full ${hoje ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'}`}>
-                      {itens.length}
-                    </span>
-                  )}
-                </button>
+                            return (
+                <div key={dia} className="relative aspect-square">
+                  <button
+                    onClick={() => irParaDia(dia)}
+                    className={`w-full h-full rounded-lg border p-2 flex flex-col items-center justify-center transition-colors ${
+                      hoje ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-100 hover:border-blue-300'
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{dataObj.getDate()}</p>
+                    {itens.length > 0 && (
+                      <span className={`text-[9px] mt-0.5 px-1.5 rounded-full ${hoje ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'}`}>
+                        {itens.length}
+                      </span>
+                    )}
+                  </button>
+                  <a
+                    href={`/dashboard/agenda/novo?data=${dia}`}
+                    onClick={e => e.stopPropagation()}
+                    title="Novo agendamento neste dia"
+                    className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-colors ${
+                      hoje ? 'bg-white text-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    +
+                  </a>
+                </div>
               )
             })}
           </div>
