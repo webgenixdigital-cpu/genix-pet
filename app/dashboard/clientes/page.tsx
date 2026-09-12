@@ -53,13 +53,24 @@ export default function ClientesPage() {
       return
     }
 
-    const { data: clientesData } = await supabase
-      .from('customers')
-      .select('id, nome, telefone, cpf, pets ( id, nome )')
-      .eq('tenant_id', tenant.id)
-      .order('nome')
+        let todosClientes: any[] = []
+    let pagina = 0
+    const tamanhoPagina = 1000
+    while (true) {
+      const { data: clientesData } = await supabase
+        .from('customers')
+        .select('id, nome, telefone, cpf, pets ( id, nome )')
+        .eq('tenant_id', tenant.id)
+        .order('nome')
+        .range(pagina * tamanhoPagina, pagina * tamanhoPagina + tamanhoPagina - 1)
 
-    setClientes((clientesData as any) || [])
+      if (!clientesData || clientesData.length === 0) break
+      todosClientes = [...todosClientes, ...clientesData]
+      if (clientesData.length < tamanhoPagina) break
+      pagina++
+    }
+
+    setClientes(todosClientes)
     setCarregando(false)
   }
 
@@ -134,9 +145,11 @@ export default function ClientesPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div>
+                <div>
           <h2 className="text-xl font-semibold text-gray-900">Clientes</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Clientes cadastrados e venda de pacotes</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Clientes cadastrados e venda de pacotes · <span className="font-medium text-gray-700">{clientes.length} no total</span>
+          </p>
         </div>
         <a
           href="/dashboard/clientes/sem-retorno"
