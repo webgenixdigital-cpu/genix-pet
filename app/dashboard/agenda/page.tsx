@@ -1061,7 +1061,19 @@ export default function AgendaPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-center gap-3 py-1">
+                            <div className="flex items-center justify-center gap-3 py-1">
+                <a
+                  href={`/dashboard/clientes/${infoAberto.customer_id}?pet=${infoAberto.pet_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Ver/editar pet"
+                  className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="7" cy="8" r="1.6" /><circle cx="12" cy="6" r="1.6" /><circle cx="17" cy="8" r="1.6" />
+                    <path d="M12 11c-3.2 0-5.5 2-5.5 4.4 0 1.8 1.5 2.9 3.3 2.4a4 4 0 0 1 4.4 0c1.8.5 3.3-.6 3.3-2.4 0-2.4-2.3-4.4-5.5-4.4z" />
+                  </svg>
+                </a>
                 <button
                   onClick={() => { setTicketAberto(infoAberto); setInfoAberto(null) }}
                   title="Imprimir ticket"

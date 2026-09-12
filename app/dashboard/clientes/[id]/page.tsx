@@ -94,13 +94,29 @@ export default function DetalhesClientePage() {
   const [salvando, setSalvando] = useState(false)
     const [ticketAberto, setTicketAberto] = useState<Agendamento | null>(null)
   const [petSelecionadoId, setPetSelecionadoId] = useState<string | null>(null)
-  const [pendencias, setPendencias] = useState<Pendencia[]>([])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const petUrl = params.get('pet')
+    if (petUrl) setPetSelecionadoId(petUrl)
+  }, [])
+    const [pendencias, setPendencias] = useState<Pendencia[]>([])
   const [modalReceber, setModalReceber] = useState<Pendencia | null>(null)
   const [formaRecebimento, setFormaRecebimento] = useState('Dinheiro')
   const [recebendo, setRecebendo] = useState(false)  
-  const [editandoObsPet, setEditandoObsPet] = useState(false)
+    const [editandoObsPet, setEditandoObsPet] = useState(false)
   const [obsPetTexto, setObsPetTexto] = useState('')
   const [salvandoObsPet, setSalvandoObsPet] = useState(false)
+
+  const [editandoCaracteristicasPet, setEditandoCaracteristicasPet] = useState(false)
+  const [petNomeEdit, setPetNomeEdit] = useState('')
+  const [petEspecieEdit, setPetEspecieEdit] = useState('cachorro')
+  const [petPorteEdit, setPetPorteEdit] = useState('medio')
+  const [petRacaEdit, setPetRacaEdit] = useState('')
+  const [petSexoEdit, setPetSexoEdit] = useState('')
+  const [petPelagemEdit, setPetPelagemEdit] = useState('curta')
+  const [petCastradoEdit, setPetCastradoEdit] = useState<boolean | null>(null)
+  const [salvandoCaracteristicasPet, setSalvandoCaracteristicasPet] = useState(false)
 
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -214,7 +230,7 @@ export default function DetalhesClientePage() {
     setModalReceber(null)
     carregarDados()
   }
-  async function salvarObsPet() {
+    async function salvarObsPet() {
     if (!petSelecionadoId) return
     setSalvandoObsPet(true)
 
@@ -225,6 +241,39 @@ export default function DetalhesClientePage() {
 
     setSalvandoObsPet(false)
     setEditandoObsPet(false)
+    carregarDados()
+  }
+
+  function iniciarEdicaoCaracteristicasPet(pet: Pet) {
+    setPetNomeEdit(pet.nome)
+    setPetEspecieEdit(pet.especie || 'cachorro')
+    setPetPorteEdit(pet.porte || 'medio')
+    setPetRacaEdit(pet.raca || '')
+    setPetSexoEdit(pet.sexo || '')
+    setPetPelagemEdit(pet.pelagem || 'curta')
+    setPetCastradoEdit(pet.castrado)
+    setEditandoCaracteristicasPet(true)
+  }
+
+  async function salvarCaracteristicasPet() {
+    if (!petSelecionadoId) return
+    setSalvandoCaracteristicasPet(true)
+
+    await supabase
+      .from('pets')
+      .update({
+        nome: petNomeEdit,
+        especie: petEspecieEdit,
+        porte: petPorteEdit,
+        raca: petRacaEdit || null,
+        sexo: petSexoEdit || null,
+        pelagem: petPelagemEdit,
+        castrado: petCastradoEdit,
+      })
+      .eq('id', petSelecionadoId)
+
+    setSalvandoCaracteristicasPet(false)
+    setEditandoCaracteristicasPet(false)
     carregarDados()
   }
     async function enviarTicketWhatsapp(a: Agendamento) {
@@ -565,7 +614,7 @@ export default function DetalhesClientePage() {
             </div>
           </div>
 
-          {resumoPet.planoAtivo && (
+                    {resumoPet.planoAtivo && (
             <div className="bg-white rounded-lg p-3 mb-3">
               <p className="text-xs text-gray-400">Plano ativo</p>
               <p className="text-sm font-medium text-gray-900">
@@ -573,6 +622,123 @@ export default function DetalhesClientePage() {
               </p>
             </div>
           )}
+
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-blue-600">Caracteristicas</p>
+              {!editandoCaracteristicasPet && (
+                <button onClick={() => iniciarEdicaoCaracteristicasPet(petSelecionado)} className="text-xs text-blue-600 hover:underline">
+                  ✏️ Editar
+                </button>
+              )}
+            </div>
+
+            {editandoCaracteristicasPet ? (
+              <div className="bg-white rounded-lg p-3 flex flex-col gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Nome</label>
+                  <input
+                    type="text"
+                    value={petNomeEdit}
+                    onChange={e => setPetNomeEdit(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Especie</label>
+                    <select
+                      value={petEspecieEdit}
+                      onChange={e => setPetEspecieEdit(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="cachorro">Cachorro</option>
+                      <option value="gato">Gato</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Sexo</label>
+                    <select
+                      value={petSexoEdit}
+                      onChange={e => setPetSexoEdit(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Nao informado</option>
+                      <option value="macho">Macho</option>
+                      <option value="femea">Femea</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Raca</label>
+                  <input
+                    type="text"
+                    value={petRacaEdit}
+                    onChange={e => setPetRacaEdit(e.target.value)}
+                    placeholder="SRD, se nao souber"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Porte</label>
+                    <select
+                      value={petPorteEdit}
+                      onChange={e => setPetPorteEdit(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="mini">Mini</option>
+                      <option value="pequeno">Pequeno</option>
+                      <option value="medio">Medio</option>
+                      <option value="grande">Grande</option>
+                      <option value="extra_grande">Extra Grande</option>
+                      <option value="gigante">Gigante</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Pelagem</label>
+                    <select
+                      value={petPelagemEdit}
+                      onChange={e => setPetPelagemEdit(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="curta">Curta</option>
+                      <option value="longa">Longa</option>
+                    </select>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={!!petCastradoEdit}
+                    onChange={e => setPetCastradoEdit(e.target.checked)}
+                  />
+                  Castrado
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditandoCaracteristicasPet(false)}
+                    className="flex-1 border border-gray-200 text-gray-600 text-xs py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={salvarCaracteristicasPet}
+                    disabled={salvandoCaracteristicasPet}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {salvandoCaracteristicasPet ? 'Salvando...' : 'Salvar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-blue-900">
+                {petSelecionado.especie} • {petSelecionado.porte} • {petSelecionado.raca || 'SRD'} • pelagem {petSelecionado.pelagem}
+                {petSelecionado.sexo && ` • ${petSelecionado.sexo}`}
+                {petSelecionado.castrado !== null && ` • ${petSelecionado.castrado ? 'castrado' : 'nao castrado'}`}
+              </p>
+            )}
+          </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
