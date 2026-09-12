@@ -756,7 +756,7 @@ export default function AgendaPage() {
                         onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
                         className="text-left w-full"
                       >
-                        <div className="flex items-center justify-between mb-1.5">
+                                               <div className="flex items-center justify-between mb-1.5">
                           <span className="text-xs font-medium text-gray-900">
                             {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -767,11 +767,6 @@ export default function AgendaPage() {
                             )}
                             {a.is_recorrente && <span className="text-xs" title="Faz parte de um plano recorrente">🔁</span>}
                             {a.precisa_transporte && <span className="text-xs">🚐</span>}
-                            {pacotesPorPet[a.pet_id] && (
-                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
-                                🎁 {pacotesPorPet[a.pet_id].usadas + 1}/{pacotesPorPet[a.pet_id].total}
-                              </span>
-                            )}
                             <div
                               className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0"
                               style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
@@ -781,7 +776,42 @@ export default function AgendaPage() {
                           </div>
                         </div>
                         <p className="text-sm font-medium text-gray-900 truncate">{a.pets?.nome}</p>
-                        <p className="text-xs text-gray-400 truncate">{a.customers?.nome}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-xs text-gray-400 truncate">{a.customers?.nome}</p>
+                          {(() => {
+                            const ultimoStatus = agendamentos
+                              .filter(x => x.pet_id === a.pet_id && x.id !== a.id && new Date(x.inicio) < new Date(a.inicio))
+                              .sort((x, y) => new Date(y.inicio).getTime() - new Date(x.inicio).getTime())[0]
+                            if (!ultimoStatus || !['concluido', 'faltou'].includes(ultimoStatus.status)) return null
+                            return ultimoStatus.status === 'concluido' ? (
+                              <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium" title="Compareceu na ultima visita">
+                                ✓ Compareceu
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-medium" title="Faltou na ultima visita">
+                                ✕ Faltou
+                              </span>
+                            )
+                          })()}
+                        </div>
+                        {pacotesPorPet[a.pet_id] && (
+                          pacotesPorPet[a.pet_id].usadas + 1 > pacotesPorPet[a.pet_id].total ? (
+                            <a  
+                              href="/dashboard/caixa"
+                              onClick={e => e.stopPropagation()}
+                              className="mt-1.5 flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 hover:bg-red-100 transition-colors"
+                            >
+                              <span className="text-[10px] font-semibold text-red-700">🔴 Plano esgotado — Renovar</span>
+                              <span className="text-[9px] text-red-500">Ir ao Caixa →</span>
+                            </a>
+                          ) : (
+                            <div className="mt-1.5 bg-purple-50 border border-purple-100 rounded-lg px-2 py-1 text-center">
+                              <span className="text-[10px] font-semibold text-purple-700">
+                                🎁 Banho {pacotesPorPet[a.pet_id].usadas + 1} de {pacotesPorPet[a.pet_id].total}
+                              </span>
+                            </div>
+                          )
+                        )}
                       </button>
 
                       {a.status === 'concluido' ? (
