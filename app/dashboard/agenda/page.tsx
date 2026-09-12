@@ -71,7 +71,10 @@ export default function AgendaPage() {
   const [itensParaEdicao, setItensParaEdicao] = useState<any[]>([])
   const [itensSelecionadosEdicao, setItensSelecionadosEdicao] = useState<Set<string>>(new Set())
   const [salvandoServico, setSalvandoServico] = useState(false)
-  const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
+    const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
+  const [modalReceberAgendamento, setModalReceberAgendamento] = useState<Agendamento | null>(null)
+  const [formaPagamentoReceber, setFormaPagamentoReceber] = useState('Dinheiro')
+  const [recebendoPagamento, setRecebendoPagamento] = useState(false)
   const [novaData, setNovaData] = useState('')
   const [novoHorario, setNovoHorario] = useState('')
   const [reagendando, setReagendando] = useState(false)
@@ -419,6 +422,23 @@ export default function AgendaPage() {
       .eq('status', 'pendente')
 
     setInfoAberto(null)
+    carregarAgendamentos()
+  }
+
+  async function confirmarRecebimentoAgendamento() {
+    if (!modalReceberAgendamento) return
+    setRecebendoPagamento(true)
+
+    await supabase.from('appointments').update({ pago: true }).eq('id', modalReceberAgendamento.id)
+
+    await supabase
+      .from('financial_transactions')
+      .update({ status: 'pago', forma_pagamento: formaPagamentoReceber, data_lancamento: new Date().toISOString().split('T')[0] })
+      .eq('appointment_id', modalReceberAgendamento.id)
+      .eq('status', 'pendente')
+
+    setRecebendoPagamento(false)
+    setModalReceberAgendamento(null)
     carregarAgendamentos()
   }
 
@@ -1072,9 +1092,18 @@ export default function AgendaPage() {
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  {PROXIMO_STATUS[infoAberto.status] && (
+                                    {PROXIMO_STATUS[infoAberto.status] && (
                     <button
-                      onClick={() => { avancarStatus(infoAberto.id, infoAberto.status); setInfoAberto(null) }}
+                      onClick={async () => {
+                        const vaiConcluir = PROXIMO_STATUS[infoAberto.status] === 'concluido'
+                        const agendamentoAtual = infoAberto
+                        await avancarStatus(infoAberto.id, infoAberto.status)
+                        setInfoAberto(null)
+                        if (vaiConcluir && Number(agendamentoAtual.preco_cobrado || 0) > 0 && !agendamentoAtual.pago) {
+                          setModalReceberAgendamento(agendamentoAtual)
+                          setFormaPagamentoReceber('Dinheiro')
+                        }
+                      }}
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors"
                     >
                       Avancar →
@@ -1223,12 +1252,57 @@ export default function AgendaPage() {
               >
                 Fechar
               </button>
-              <button
+                            <button
                 onClick={salvarNotasInternas}
                 disabled={salvandoNotas}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
               >
                 {salvandoNotas ? 'Salvando...' : 'Salvar observacao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalReceberAgendamento && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <div className="text-center mb-4">
+              <div className="text-3xl mb-2">💰</div>
+              <h3 className="text-lg font-semibold text-gray-900">Receber pagamento</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {modalReceberAgendamento.pets?.nome} — {modalReceberAgendamento.customers?.nome}
+              </p>
+              <p className="text-2xl font-semibold text-green-600 mt-3">
+                R$ {Number(modalReceberAgendamento.preco_cobrado || 0).toFixed(2).replace('.', ',')}
+              </p>
+            </div>
+
+            <label className="text-sm text-gray-600 mb-1 block">Forma de pagamento</label>
+            <select
+              value={formaPagamentoReceber}
+              onChange={e => setFormaPagamentoReceber(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Dinheiro">Dinheiro</option>
+              <option value="Pix">Pix</option>
+              <option value="Cartao de credito">Cartao de credito</option>
+              <option value="Cartao de debito">Cartao de debito</option>
+            </select>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setModalReceberAgendamento(null)}
+                className="flex-1 border border-gray-200 text-gray-600 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Deixar pendente
+              </button>
+              <button
+                onClick={confirmarRecebimentoAgendamento}
+                disabled={recebendoPagamento}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {recebendoPagamento ? 'Confirmando...' : 'Confirmar recebimento'}
               </button>
             </div>
           </div>
