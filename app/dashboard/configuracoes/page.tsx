@@ -441,8 +441,44 @@ function ConfiguracoesConteudo() {
     }
   }
 
+      const hojeISO = new Date()
+  hojeISO.setHours(0, 0, 0, 0)
+  const diasParaVencerMensalidade = mensalidadeVenceEm
+    ? Math.ceil((new Date(mensalidadeVenceEm + 'T00:00:00').getTime() - hojeISO.getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  const mostrarAvisoVencimentoMensalidade =
+    mensalidadeVenceEm !== null &&
+    mensalidadeStatus !== null &&
+    (mensalidadeStatus === 'atrasado' || (diasParaVencerMensalidade !== null && diasParaVencerMensalidade <= 3))
+
     return (
     <div className="max-w-2xl">
+      {mostrarAvisoVencimentoMensalidade && (
+        <div className={`border rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap ${
+          mensalidadeStatus === 'atrasado' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
+        }`}>
+          <div>
+            <p className={`text-sm font-semibold ${mensalidadeStatus === 'atrasado' ? 'text-red-700' : 'text-yellow-700'}`}>
+              {mensalidadeStatus === 'atrasado'
+                ? 'Sua mensalidade esta atrasada'
+                : `Sua mensalidade vence em ${diasParaVencerMensalidade} dia(s)`}
+            </p>
+            <p className={`text-xs mt-0.5 ${mensalidadeStatus === 'atrasado' ? 'text-red-500' : 'text-yellow-600'}`}>
+              Renove agora via Pix para evitar interrupcao no acesso.
+            </p>
+          </div>
+          <button
+            onClick={() => assinarComPix('catalogo')}
+            className={`text-xs font-medium px-4 py-2 rounded-lg text-white whitespace-nowrap ${
+              mensalidadeStatus === 'atrasado' ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-600 hover:bg-yellow-700'
+            }`}
+          >
+            Pagar com Pix
+          </button>
+        </div>
+      )}
+
       {assinaturaSucesso && (
         <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
           <span className="text-2xl">✅</span>

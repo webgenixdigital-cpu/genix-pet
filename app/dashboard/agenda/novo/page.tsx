@@ -305,7 +305,7 @@ export default function AgendarPage() {
     carregar()
   }, [slug])
   
-    async function buscarClientePorTelefone(telefoneDigitado: string) {
+      async function buscarClientePorTelefone(telefoneDigitado: string) {
     setClienteExistente(null)
     setPetsDoCliente([])
 
@@ -318,7 +318,7 @@ export default function AgendarPage() {
 
     const { data: clientes } = await supabase
       .from('customers')
-      .select('id, nome, telefone, pets ( id, nome, especie, porte, raca, pelagem )')
+      .select('id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem )')
       .eq('tenant_id', tenant.id)
       .ilike('telefone', `%${telefoneDigitado.replace(/\D/g, '')}%`)
       .limit(6)
@@ -340,7 +340,7 @@ export default function AgendarPage() {
 
     const { data: clientes } = await supabase
       .from('customers')
-      .select('id, nome, telefone, pets ( id, nome, especie, porte, raca, pelagem )')
+      .select('id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem )')
       .eq('tenant_id', tenant.id)
       .ilike('nome', `%${nomeDigitado.trim()}%`)
       .limit(6)
@@ -349,12 +349,20 @@ export default function AgendarPage() {
     setBuscandoCliente(false)
   }
 
-  function selecionarClienteExistente(cliente: any) {
+    function selecionarClienteExistente(cliente: any) {
     setClienteExistente(cliente)
     setNomeCliente(cliente.nome)
     setTelefoneCliente(cliente.telefone)
     setPetsDoCliente(cliente.pets || [])
     setSugestoesClientes([])
+
+    if (cliente.endereco_rua) {
+      setRuaColeta(cliente.endereco_rua || '')
+      setNumeroColeta(cliente.endereco_numero || '')
+      setBairroColeta(cliente.endereco_bairro || '')
+      setCidadeColeta(cliente.endereco_cidade || '')
+      setCepColeta(cliente.endereco_cep || '')
+    }
   }
 
     async function buscarCep(cep: string) {
@@ -697,12 +705,24 @@ export default function AgendarPage() {
       .eq('telefone', telefoneCliente)
       .maybeSingle()
 
-    let clienteId = clienteExistenteQuery?.id
+        let clienteId = clienteExistenteQuery?.id
+
+    const temEnderecoPreenchido = !!(ruaColeta && numeroColeta && cidadeColeta)
 
     if (!clienteId) {
+      const dadosNovoCliente: Record<string, any> = { tenant_id: tenant.id, nome: nomeCliente, telefone: telefoneCliente }
+
+      if (temEnderecoPreenchido) {
+        dadosNovoCliente.endereco_rua = ruaColeta
+        dadosNovoCliente.endereco_numero = numeroColeta
+        dadosNovoCliente.endereco_bairro = bairroColeta
+        dadosNovoCliente.endereco_cidade = cidadeColeta
+        dadosNovoCliente.endereco_cep = cepColeta
+      }
+
       const { data: novoCliente, error: erroCliente } = await supabase
         .from('customers')
-        .insert({ tenant_id: tenant.id, nome: nomeCliente, telefone: telefoneCliente })
+        .insert(dadosNovoCliente)
         .select('id')
         .single()
 
@@ -712,6 +732,17 @@ export default function AgendarPage() {
         return
       }
       clienteId = novoCliente.id
+    } else if (temEnderecoPreenchido && !clienteExistente?.endereco_rua) {
+      await supabase
+        .from('customers')
+        .update({
+          endereco_rua: ruaColeta,
+          endereco_numero: numeroColeta,
+          endereco_bairro: bairroColeta,
+          endereco_cidade: cidadeColeta,
+          endereco_cep: cepColeta,
+        })
+        .eq('id', clienteId)
     }
     
         const enderecoColetaFinal = precisaTransporte

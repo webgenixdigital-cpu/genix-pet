@@ -151,6 +151,7 @@ export default function ClientesPage() {
             Clientes cadastrados e venda de pacotes · <span className="font-medium text-gray-700">{clientes.length} no total</span>
           </p>
         </div>
+        
         <a
           href="/dashboard/clientes/sem-retorno"
           className="text-sm text-orange-600 border border-orange-200 px-3 py-1.5 rounded-lg hover:bg-orange-50 transition-colors whitespace-nowrap"
