@@ -44,24 +44,10 @@ const PLANOS = [
       'Controle de estoque avançado',
     ],
   },
-    {
-    nome: 'Pro',
-    preco: '379,90',
-    desc: 'Até 10 profissionais',
-    destaque: false,
-    disponivel: false,
-    itens: [
-      'Tudo do Premium',
-      'Catálogo pré-preenchido com 48 raças',
-      'WhatsApp automático (lembretes, pós-venda, prospecção)',
-      'Busca automática de produtos (NF-e / código de barras)',
-      'Suporte prioritário',
-    ],
-  },
-  {
+      {
     nome: 'Catálogo',
-    preco: '42,90',
-    desc: 'Ideal para quem já usa outro sistema',
+    preco: '29,90',
+    desc: 'Ideal para quem já usa outro sistema · Promo primeiros 12 meses (depois R$ 42,90)',
     destaque: false,
     disponivel: true,
     itens: [
@@ -707,11 +693,14 @@ export default function LandingPage() {
       </section>
 
       {/* PLANOS */}
-      <section id="planos" className="max-w-6xl mx-auto px-6 py-14 md:py-24 bg-gray-50 rounded-[32px]">
+            <section id="planos" className="max-w-6xl mx-auto px-6 py-14 md:py-24 bg-gray-50 rounded-[32px]">
         <div className="text-center mb-8 md:mb-12">
           <Eyebrow>Planos</Eyebrow>
           <Titulo className="mb-2">Planos simples e transparentes</Titulo>
           <p className="text-gray-500">{CTA_SUB}</p>
+          <span className="inline-block mt-4 bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-full">
+            🎉 Lancamento: 50% de desconto no 1o ano com o cupom 50GENIXPET
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
