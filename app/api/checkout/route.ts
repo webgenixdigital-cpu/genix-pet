@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     payment_method_types: ['card'],
     line_items: [{ price: priceId, quantity: 1 }],
     customer_email: tenant.email,
+    allow_promotion_codes: true,
     success_url: `${request.nextUrl.origin}/dashboard/configuracoes?assinatura=sucesso`,
     cancel_url: `${request.nextUrl.origin}/dashboard/configuracoes?assinatura=cancelado`,
     metadata: {
