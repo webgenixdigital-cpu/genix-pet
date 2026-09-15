@@ -259,7 +259,7 @@ export default function RelatorioFiscalPage() {
         )}
       </div>
 
-      <div className="flex items-center gap-2 mb-6">
+            <div className="flex items-center gap-2 mb-4">
         <button
           onClick={() => setAba('periodo')}
           className={`text-sm px-4 py-2 rounded-lg border transition-colors ${
@@ -277,6 +277,14 @@ export default function RelatorioFiscalPage() {
           📋 Fechamento Anual (DASN-SIMEI)
         </button>
       </div>
+
+<a      
+        href="/manual-reforma-tributaria-pet.docx"
+        download
+        className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 text-xs font-medium px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors mb-6"
+      >
+        📘 Baixar guia: Reforma Tributária (IBS/CBS) para o seu Pet Shop
+      </a>
 
       {aba === 'periodo' && (
       <>
