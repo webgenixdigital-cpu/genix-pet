@@ -195,15 +195,15 @@ export default function DashboardLayout({
         { id: 'suporte', href: '/dashboard/suporte', label: 'Suporte', liberado: true },
       ]
     : [
-        { id: 'inicio', href: '/dashboard', label: 'Início', liberado: true },
+                { id: 'inicio', href: '/dashboard', label: 'Início', liberado: true },
         { id: 'agenda', href: '/dashboard/agenda', label: 'Agenda', liberado: true },
-        { id: 'profissionais', href: '/dashboard/profissionais', label: 'Profissionais', liberado: true },
+        { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes', liberado: true },
+        { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa', liberado: true },
+        { id: 'financeiro', href: '/dashboard/financeiro', label: 'Financeiro', liberado: true },
         { id: 'catalogo', href: '/dashboard/catalogo', label: 'Catalogo', liberado: true },
         { id: 'produtos', href: '/dashboard/produtos', label: 'Produtos', liberado: true },
         { id: 'pacotes', href: '/dashboard/pacotes', label: 'Pacotes', liberado: true },
-        { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes', liberado: true },
-        { id: 'financeiro', href: '/dashboard/financeiro', label: 'Financeiro', liberado: true },
-        { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa', liberado: true },
+        { id: 'profissionais', href: '/dashboard/profissionais', label: 'Profissionais', liberado: true },
         { id: 'relatorio-fiscal', href: '/dashboard/relatorio-fiscal', label: 'Relatorio Fiscal', liberado: permissoes.tem_relatorio_fiscal },
         { id: 'configuracoes', href: '/dashboard/configuracoes', label: 'Configurações', liberado: true },
         { id: 'suporte', href: '/dashboard/suporte', label: 'Suporte', liberado: true },
@@ -314,9 +314,9 @@ export default function DashboardLayout({
             {!menuMinimizado && 'Sair'}
           </button>
         </div>
-      </aside>
+            </aside>
 
-            <main className="flex-1 p-4 md:p-8 overflow-auto mt-14 md:mt-0">
+      <main className="flex-1 p-4 md:p-8 overflow-auto mt-14 md:mt-0 pb-20">
         {permissoes.apenas_catalogo && (
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-5 mb-6 text-white flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -333,8 +333,32 @@ export default function DashboardLayout({
             </a>
           </div>
         )}
-        {children}
+                {children}
       </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-2px_12px_rgba(15,23,42,0.06)] z-30 flex items-center justify-around px-2 py-1.5">
+        {[
+          { id: 'inicio', href: '/dashboard', label: 'Início' },
+          { id: 'agenda', href: '/dashboard/agenda', label: 'Agenda' },
+          { id: 'clientes', href: '/dashboard/clientes', label: 'Clientes' },
+          { id: 'caixa', href: '/dashboard/caixa', label: 'Caixa' },
+        ].map(item => {
+          const IconComp = IconesMenu[item.id] || IconesMenu.configuracoes
+          const ativo = pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors ${
+                ativo ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <IconComp />
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </Link>
+          )
+        })}
+      </nav>
 
       {boasVindasAberto && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
