@@ -81,6 +81,10 @@ type PetNoAgendamento = {
   itensSelecionados: Set<string>
   planoEscolhido: Plano | null
   planoAtivarAgora: boolean
+  checklistNo: string | null
+  checklistVacinas: string | null
+  checklistAlergia: string | null
+  checklistPulgas: string | null
 }
 
 function petEmBranco(): PetNoAgendamento {
@@ -90,6 +94,7 @@ function petEmBranco(): PetNoAgendamento {
     porte: 'medio', pelagem: 'curta',
     usarFluxoRaca: null, racaSelecionada: null, itensSelecionados: new Set(),
     planoEscolhido: null, planoAtivarAgora: true,
+    checklistNo: null, checklistVacinas: null, checklistAlergia: null, checklistPulgas: null,
   }
 }
 
@@ -165,7 +170,7 @@ export default function AgendarPage() {
   // Arquitetura nova: um pet "em construcao" por vez, e uma lista dos ja confirmados
   const [petAtual, setPetAtual] = useState<PetNoAgendamento>(petEmBranco())
   const [petsConfirmados, setPetsConfirmados] = useState<PetNoAgendamento[]>([])
-     const [subPassoPet, setSubPassoPet] = useState<'nome' | 'perfil' | 'servicos' | 'plano' | 'confirmado'>('nome')
+     const [subPassoPet, setSubPassoPet] = useState<'nome' | 'perfil' | 'servicos' | 'plano' | 'checklist' | 'confirmado'>('nome')
   const [mostrarFormNovoPet, setMostrarFormNovoPet] = useState(false)
 
   const [profissionalSelecionado, setProfissionalSelecionado] = useState<Profissional | null>(null)
@@ -467,6 +472,10 @@ export default function AgendarPage() {
       itensSelecionados: new Set(),
       planoEscolhido: null,
       planoAtivarAgora: true,
+      checklistNo: null,
+      checklistVacinas: null,
+      checklistAlergia: null,
+      checklistPulgas: null,
     })
     setSubPassoPet('servicos')
   }
@@ -869,13 +878,19 @@ export default function AgendarPage() {
                     precisa_transporte: precisaTransporte,
           endereco_coleta: precisaTransporte ? enderecoColetaFinal : null,
           endereco_entrega: precisaTransporte ? enderecoColetaFinal : null,
-                              is_recorrente: !!(pet.planoEscolhido && pet.planoAtivarAgora),
+                                                            is_recorrente: !!(pet.planoEscolhido && pet.planoAtivarAgora),
           forma_pagamento_solicitada: formaPagamento,
           distancia_km: precisaTransporte ? distanciaKm : null,
           transporte_ida_volta: precisaTransporte ? transporteIdaVolta : false,
           valor_transporte: precisaTransporte && distanciaKm && tenant?.preco_por_km
             ? Math.max(distanciaKm * Number(tenant.preco_por_km), Number(tenant.valor_minimo_transporte || 0)) * (transporteIdaVolta ? 2 : 1)
             : 0,
+          checklist_avaliacao: {
+            no: pet.checklistNo,
+            vacinas: pet.checklistVacinas,
+            alergia: pet.checklistAlergia,
+            pulgas_carrapatos: pet.checklistPulgas,
+          },
         })
         .select('id')
         .single()
@@ -1392,8 +1407,8 @@ export default function AgendarPage() {
                       <p className="text-sm text-gray-400 text-center py-6">
                         Nenhum plano disponivel para este pet no momento.
                       </p>
-                      <button
-                        onClick={() => setSubPassoPet('confirmado')}
+                                            <button
+                        onClick={() => setSubPassoPet('checklist')}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors"
                       >
                         Continuar sem plano
@@ -1416,7 +1431,7 @@ export default function AgendarPage() {
                         </button>
                       ))}
                       <button
-                        onClick={() => { escolherPlano(null); setSubPassoPet('confirmado') }}
+                        onClick={() => { escolherPlano(null); setSubPassoPet('checklist') }}
                         className="text-xs text-gray-500 hover:underline text-center mt-2"
                       >
                         Nao quero plano, so este agendamento
@@ -1440,14 +1455,14 @@ export default function AgendarPage() {
 
                       <div className="flex flex-col gap-2">
                         <button
-                          onClick={() => { atualizarPetAtual('planoAtivarAgora', true); setSubPassoPet('confirmado') }}
+                          onClick={() => { atualizarPetAtual('planoAtivarAgora', true); setSubPassoPet('checklist') }}
                           className="border border-gray-200 rounded-xl p-3 text-left hover:border-blue-300 transition-colors"
                         >
                           <p className="text-sm font-medium text-gray-900">Sim, comecar agora</p>
                           <p className="text-xs text-gray-400">Este agendamento entra como o 1º banho do plano</p>
                         </button>
                         <button
-                          onClick={() => { atualizarPetAtual('planoAtivarAgora', false); setSubPassoPet('confirmado') }}
+                          onClick={() => { atualizarPetAtual('planoAtivarAgora', false); setSubPassoPet('checklist') }}
                           className="border border-gray-200 rounded-xl p-3 text-left hover:border-blue-300 transition-colors"
                         >
                           <p className="text-sm font-medium text-gray-900">Nao, comecar no proximo banho</p>
@@ -1466,6 +1481,97 @@ export default function AgendarPage() {
                 </div>
               )
             })()}
+
+            {subPassoPet === 'checklist' && (
+              <div>
+                <button onClick={() => setSubPassoPet('plano')} className="text-xs text-blue-600 mb-3 hover:underline block">
+                  ← Voltar
+                </button>
+                <h2 className="text-sm font-medium text-gray-900 mb-1">Avaliacao rapida do pet</h2>
+                <p className="text-xs text-gray-400 mb-4">
+                  Ajuda a equipe a se preparar para o atendimento de {petAtual.nome}
+                </p>
+
+                <div className="flex flex-col gap-4">
+                  {petAtual.pelagem === 'longa' && (
+                    <div>
+                      <p className="text-sm text-gray-700 mb-2">Esta com no?</p>
+                      <div className="flex gap-2">
+                        {(['sim', 'nao', 'nao_sei'] as const).map(opcao => (
+                          <button
+                            key={opcao}
+                            onClick={() => atualizarPetAtual('checklistNo', opcao)}
+                            className={`flex-1 text-xs py-2 rounded-lg border transition-colors ${
+                              petAtual.checklistNo === opcao ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {opcao === 'sim' ? 'Sim' : opcao === 'nao' ? 'Nao' : 'Nao sei'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-sm text-gray-700 mb-2">As vacinas estao atualizadas?</p>
+                    <div className="flex gap-2">
+                      {(['sim', 'nao', 'nao_sei'] as const).map(opcao => (
+                        <button
+                          key={opcao}
+                          onClick={() => atualizarPetAtual('checklistVacinas', opcao)}
+                          className={`flex-1 text-xs py-2 rounded-lg border transition-colors ${
+                            petAtual.checklistVacinas === opcao ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                        >
+                          {opcao === 'sim' ? 'Sim' : opcao === 'nao' ? 'Nao' : 'Nao sei'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-gray-700 mb-2">Tem alguma alergia?</p>
+                    <div className="flex gap-2">
+                      {(['sim', 'nao', 'nao_sei'] as const).map(opcao => (
+                        <button
+                          key={opcao}
+                          onClick={() => atualizarPetAtual('checklistAlergia', opcao)}
+                          className={`flex-1 text-xs py-2 rounded-lg border transition-colors ${
+                            petAtual.checklistAlergia === opcao ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                        >
+                          {opcao === 'sim' ? 'Sim' : opcao === 'nao' ? 'Nao' : 'Nao sei'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-gray-700 mb-2">Ha possibilidade de pulgas ou carrapatos?</p>
+                    <div className="flex gap-2">
+                      {(['sim', 'nao', 'nao_sei'] as const).map(opcao => (
+                        <button
+                          key={opcao}
+                          onClick={() => atualizarPetAtual('checklistPulgas', opcao)}
+                          className={`flex-1 text-xs py-2 rounded-lg border transition-colors ${
+                            petAtual.checklistPulgas === opcao ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                        >
+                          {opcao === 'sim' ? 'Sim' : opcao === 'nao' ? 'Nao' : 'Nao sei'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setSubPassoPet('confirmado')}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors mt-5"
+                >
+                  Continuar
+                </button>
+              </div>
+            )}
 
             {subPassoPet === 'confirmado' && (() => {
               const { selecionados, total } = resumoPet(petAtual)
