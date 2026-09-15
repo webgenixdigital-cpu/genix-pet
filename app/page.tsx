@@ -399,6 +399,42 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
+            </section>
+
+      {/* RELATÓRIO FISCAL E REFORMA TRIBUTÁRIA */}
+      <section className="bg-white py-14 md:py-24 border-t border-gray-100">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <div className="flex justify-center mb-4">
+            <IconBadge cor="green" tamanho="w-14 h-14">
+              <span className="scale-125">{Icones.relatorio()}</span>
+            </IconBadge>
+          </div>
+          <div className="flex items-center gap-2 justify-center mb-3">
+            <Eyebrow className="mb-0">Fiscal</Eyebrow>
+            <Chip>Novidade</Chip>
+          </div>
+          <Titulo className="mb-4">Relatório Fiscal já preparado para a Reforma Tributária</Titulo>
+          <p className="text-gray-500 max-w-2xl mx-auto leading-relaxed mb-10">
+            Acompanhe as mudanças do IBS e da CBS sem complicação. O Genix Pet já organiza sua
+            receita na base certa para a declaração do Simples Nacional — e disponibiliza um guia
+            explicativo sobre o que muda (e o que não muda) para o seu pet shop.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {[
+              { texto: 'Fechamento por período e Fechamento Anual (DASN-SIMEI)', icone: 'relatorio', cor: 'green' },
+              { texto: 'Base separada por serviços e produtos', icone: 'grafico', cor: 'blue' },
+              { texto: 'Guia gratuito sobre a Reforma Tributária para o seu negócio', icone: 'check', cor: 'amber' },
+            ].map(i => (
+              <div
+                key={i.texto}
+                className="bg-white border border-gray-100 rounded-[20px] p-6 flex flex-col items-center gap-3 text-center shadow-[0_2px_16px_rgba(15,23,42,0.04)]"
+              >
+                <IconBadge cor={i.cor as CorBadge}>{Icones[i.icone as keyof typeof Icones]()}</IconBadge>
+                <p className="text-sm text-gray-700 font-medium">{i.texto}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* CATÁLOGO DIGITAL */}
@@ -497,39 +533,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* TRANSPORTE INTELIGENTE */}
-      <section className="bg-gray-50 py-14 md:py-24">
-        <div className="max-w-5xl mx-auto px-6 text-center">
-          <div className="flex justify-center mb-4">
-            <IconBadge cor="cyan" tamanho="w-14 h-14">
-              <span className="scale-125">{Icones.caixa()}</span>
-            </IconBadge>
-          </div>
-          <Eyebrow>Leva e traz</Eyebrow>
-          <Titulo className="mb-4">Transporte Inteligente</Titulo>
-          <p className="text-gray-500 max-w-xl mx-auto leading-relaxed mb-10">
-            Cálculo automático de distância por geolocalização, com faixas fixas de preço que
-            você mesmo configura — e que têm prioridade sobre o cálculo automático quando
-            definidas.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            {[
-              { texto: 'Distância calculada automaticamente', icone: 'grafico', cor: 'blue' },
-              { texto: 'Valor mínimo para corridas curtas', icone: 'moeda', cor: 'amber' },
-              { texto: 'Ida e volta ou só ida', icone: 'relogio', cor: 'purple' },
-            ].map(i => (
-              <div
-                key={i.texto}
-                className="bg-white border border-gray-100 rounded-[20px] p-6 flex flex-col items-center gap-3 text-center shadow-[0_2px_16px_rgba(15,23,42,0.04)]"
-              >
-                <IconBadge cor={i.cor as CorBadge}>{Icones[i.icone as keyof typeof Icones]()}</IconBadge>
-                <p className="text-sm text-gray-700 font-medium">{i.texto}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
             {/* MENSAGENS INTELIGENTES */}
       <section className="py-14 md:py-24">
         <div className="max-w-6xl mx-auto px-6">
@@ -557,6 +560,39 @@ export default function LandingPage() {
                     {`0${8 + i}:${10 + i * 3 < 60 ? 10 + i * 3 : 10}`} ✓✓
                   </p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TRANSPORTE INTELIGENTE */}
+      <section className="bg-gray-50 py-14 md:py-24">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <div className="flex justify-center mb-4">
+            <IconBadge cor="cyan" tamanho="w-14 h-14">
+              <span className="scale-125">{Icones.caixa()}</span>
+            </IconBadge>
+          </div>
+          <Eyebrow>Leva e traz</Eyebrow>
+          <Titulo className="mb-4">Transporte Inteligente</Titulo>
+          <p className="text-gray-500 max-w-xl mx-auto leading-relaxed mb-10">
+            Cálculo automático de distância por geolocalização, com faixas fixas de preço que
+            você mesmo configura — e que têm prioridade sobre o cálculo automático quando
+            definidas.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {[
+              { texto: 'Distância calculada automaticamente', icone: 'grafico', cor: 'blue' },
+              { texto: 'Valor mínimo para corridas curtas', icone: 'moeda', cor: 'amber' },
+              { texto: 'Ida e volta ou só ida', icone: 'relogio', cor: 'purple' },
+            ].map(i => (
+              <div
+                key={i.texto}
+                className="bg-white border border-gray-100 rounded-[20px] p-6 flex flex-col items-center gap-3 text-center shadow-[0_2px_16px_rgba(15,23,42,0.04)]"
+              >
+                <IconBadge cor={i.cor as CorBadge}>{Icones[i.icone as keyof typeof Icones]()}</IconBadge>
+                <p className="text-sm text-gray-700 font-medium">{i.texto}</p>
               </div>
             ))}
           </div>
