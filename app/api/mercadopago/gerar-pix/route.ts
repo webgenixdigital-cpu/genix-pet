@@ -26,19 +26,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ erro: 'Nao autenticado' }, { status: 401 })
     }
 
-    const { data: tenant } = await supabaseAdmin
+        const { data: tenant } = await supabaseAdmin
       .from('tenants')
-      .select('id, nome, email, plan_id, plans(nome, preco_mensal)')
+      .select('id, nome, email, plan_id, promo_ciclos_restantes, plans(nome, preco_mensal)')
       .eq('email', user.email!)
       .single()
-
     if (!tenant) {
       return NextResponse.json({ erro: 'Tenant nao encontrado' }, { status: 404 })
     }
 
     const tenantId = tenant.id
 
-    let valor = (tenant as any).plans?.preco_mensal || 0
+        let valor = (tenant as any).plans?.preco_mensal || 0
 
     if (planoEscolhido && NOMES_PLANO[planoEscolhido]) {
       const { data: planoEncontrado } = await supabaseAdmin
@@ -50,6 +49,12 @@ export async function POST(request: NextRequest) {
       if (planoEncontrado) {
         valor = planoEncontrado.preco_mensal
       }
+    }
+
+    const temPromoAtiva = (tenant as any).promo_ciclos_restantes !== null && (tenant as any).promo_ciclos_restantes > 0
+
+    if (planoEscolhido === 'catalogo' && temPromoAtiva) {
+      valor = 29.90
     }
 
     const resposta = await fetch('https://api.mercadopago.com/v1/payments', {

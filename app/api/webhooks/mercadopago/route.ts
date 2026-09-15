@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
           catalogo: 'Catalogo',
         }
 
-        const atualizacao: Record<string, any> = {
+                const atualizacao: Record<string, any> = {
           mensalidade_status: 'em_dia',
           mensalidade_vence_em: novoVencimento.toISOString().split('T')[0],
           status: 'active',
@@ -86,6 +86,19 @@ export async function POST(request: NextRequest) {
 
           if (planoEncontrado) {
             atualizacao.plan_id = planoEncontrado.id
+          }
+        }
+
+        if (planoMetadata === 'catalogo') {
+          const { data: tenantAtual } = await supabaseAdmin
+            .from('tenants')
+            .select('promo_ciclos_restantes')
+            .eq('id', tenantId)
+            .single()
+
+          const ciclosAtuais = tenantAtual?.promo_ciclos_restantes
+          if (ciclosAtuais !== null && ciclosAtuais !== undefined && ciclosAtuais > 0) {
+            atualizacao.promo_ciclos_restantes = ciclosAtuais - 1
           }
         }
 

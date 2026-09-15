@@ -52,11 +52,12 @@ function CadastroConteudo() {
 
         const dadosTenant: Record<string, any> = { nome, slug, email, status: 'trial' }
 
-    if (produtoCatalogo) {
+        if (produtoCatalogo) {
       const seteDias = new Date()
       seteDias.setDate(seteDias.getDate() + 7)
       dadosTenant.trial_termina_em = seteDias.toISOString().split('T')[0]
       dadosTenant.plan_id = PLANO_CATALOGO_ID
+      dadosTenant.promo_ciclos_restantes = 12
     }
 
     const { error: tenantError } = await supabase
