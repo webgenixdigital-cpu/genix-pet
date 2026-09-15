@@ -718,10 +718,21 @@ export default function LandingPage() {
                   Mais escolhido
                 </span>
               )}
-              <p className="text-sm font-medium text-gray-500">{plano.nome}</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                R$ {plano.preco}<span className="text-sm font-normal text-gray-400">/mês</span>
-              </p>
+                            <p className="text-sm font-medium text-gray-500">{plano.nome}</p>
+              {plano.nome !== 'Catálogo' ? (
+                <div className="mt-2">
+                  <p className="text-sm text-gray-400 line-through">R$ {plano.preco}/mês</p>
+                  <p className="text-3xl font-bold text-blue-600">
+                    R$ {(parseFloat(plano.preco.replace(',', '.')) / 2).toFixed(2).replace('.', ',')}
+                    <span className="text-sm font-normal text-gray-400">/mês</span>
+                  </p>
+                  <p className="text-[11px] text-blue-500 font-medium mt-0.5">com o cupom 50GENIXPET no 1o ano</p>
+                </div>
+              ) : (
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  R$ {plano.preco}<span className="text-sm font-normal text-gray-400">/mês</span>
+                </p>
+              )}
               <p className="text-xs text-gray-400 mt-1 mb-5">{plano.desc}</p>
 
               <ul className="flex flex-col gap-2 mb-6">
