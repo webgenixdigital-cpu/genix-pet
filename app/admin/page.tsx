@@ -20,7 +20,28 @@ type TenantMetricas = {
 export default function AdminPage() {
   const [tenants, setTenants] = useState<TenantMetricas[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [atualizandoId, setAtualizandoId] = useState<string | null>(null)
   const supabase = createClient()
+
+  async function atualizarStatusTenant(tenantId: string, novoStatus: string) {
+    setAtualizandoId(tenantId)
+    try {
+      const res = await fetch('/api/admin/atualizar-status-tenant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, novoStatus }),
+      })
+      if (!res.ok) {
+        const dados = await res.json()
+        alert('Erro: ' + (dados.erro || 'desconhecido'))
+      } else {
+        carregarDados()
+      }
+    } catch {
+      alert('Erro de conexao.')
+    }
+    setAtualizandoId(null)
+  }
 
   async function carregarDados() {
     setCarregando(true)
@@ -123,7 +144,8 @@ export default function AdminPage() {
                 <th className="p-3 font-medium">Clientes</th>
                 <th className="p-3 font-medium">Agendamentos</th>
                 <th className="p-3 font-medium">Profissionais</th>
-                <th className="p-3 font-medium text-right">Faturamento total</th>
+                                <th className="p-3 font-medium text-right">Faturamento total</th>
+                <th className="p-3 font-medium text-center">Acoes</th>
               </tr>
             </thead>
             <tbody>
@@ -149,8 +171,27 @@ export default function AdminPage() {
                   <td className="p-3 text-gray-600">{t.totalClientes}</td>
                   <td className="p-3 text-gray-600">{t.totalAgendamentos}</td>
                   <td className="p-3 text-gray-600">{t.totalProfissionais}</td>
-                  <td className="p-3 text-right font-medium text-gray-900">
+                                    <td className="p-3 text-right font-medium text-gray-900">
                     R$ {t.faturamentoTotal.toFixed(2).replace('.', ',')}
+                  </td>
+                  <td className="p-3 text-center">
+                    {t.status === 'inadimplente' || t.status === 'cancelled' ? (
+                      <button
+                        onClick={() => atualizarStatusTenant(t.id, 'active')}
+                        disabled={atualizandoId === t.id}
+                        className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {atualizandoId === t.id ? '...' : 'Reativar'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => atualizarStatusTenant(t.id, 'inadimplente')}
+                        disabled={atualizandoId === t.id}
+                        className="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {atualizandoId === t.id ? '...' : 'Desativar'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
