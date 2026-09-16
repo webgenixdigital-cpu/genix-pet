@@ -8,10 +8,7 @@ const LOGO_URL =
 const NIX_URL =
   'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%207%20de%20ago.%20de%202026,%2008_02_27.png'
 
-// Second Nix pose, used in the "Conheça o Nix" / social section
-const NIX_SOCIAL_URL =
-  'https://tufsjmcgvlbrqltagklr.supabase.co/storage/v1/object/public/site-assets/ChatGPT%20Image%201%20de%20set.%20de%202026,%2010_13_14.png'
-const CTA_TEXTO = 'Teste Grátis por 15 Dias'
+const CTA_TEXTO = 'Comece grátis'
 const CTA_SUB = 'Sem cartão de crédito. Comece em poucos minutos.'
 
 const PLANOS = [
@@ -209,9 +206,8 @@ export default function LandingPage() {
       <nav className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
         <Logo tamanho="h-12 md:h-14" />
         <div className="hidden md:flex items-center gap-8">
-          <a href="#dores" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Por que usar</a>
+                    <a href="#dores" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Por que usar</a>
           <a href="#recursos" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Funcionalidades</a>
-          <a href="#nix" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Conheça o Nix</a>
           <a href="#planos" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Planos</a>
         </div>
         <Link
@@ -681,39 +677,6 @@ export default function LandingPage() {
                 <p className="text-sm text-gray-700">{d}</p>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CONHEÇA O NIX */}
-      <section id="nix" className="bg-gray-50 py-14 md:py-24">
-        <div className="max-w-5xl mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-14 items-center">
-          <div className="w-56 md:w-72 mx-auto">
-            <img
-              src={NIX_SOCIAL_URL}
-              alt="Nix, o mascote do Genix Pet"
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <div className="text-center md:text-left">
-            <Eyebrow>Conheça o Nix</Eyebrow>
-            <Titulo className="mb-4">Olá! Eu sou o Nix.</Titulo>
-            <p className="text-gray-500 leading-relaxed mb-6">
-              Meu trabalho é deixar sua rotina muito mais organizada. Enquanto você cuida dos
-              pets, eu cuido da gestão — e agora também faço parte do universo Genix Pet nas
-              redes sociais.
-            </p>
-            <a
-              href="#"
-              className="inline-flex items-center gap-2 bg-white border border-gray-200 hover:border-blue-400 text-gray-800 font-semibold px-5 py-3 rounded-2xl transition-colors text-sm"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <rect x="3" y="3" width="18" height="18" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" />
-              </svg>
-              Seguir o Nix nas redes sociais
-            </a>
           </div>
         </div>
       </section>
