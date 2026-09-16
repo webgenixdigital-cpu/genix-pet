@@ -202,12 +202,14 @@ const Icones = {
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
-      {/* NAV */}
-      <nav className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
+            {/* NAV */}
+      <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-sm border-b border-gray-100 shadow-[0_2px_12px_rgba(15,23,42,0.04)] flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
         <Logo tamanho="h-12 md:h-14" />
-        <div className="hidden md:flex items-center gap-8">
-                    <a href="#dores" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Por que usar</a>
-          <a href="#recursos" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Funcionalidades</a>
+        <div className="hidden md:flex items-center gap-6">
+          <a href="#agenda" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Agenda</a>
+          <a href="#catalogo-digital" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Catálogo Digital</a>
+          <a href="#fiscal" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Relatório Fiscal</a>
+          <a href="#whatsapp" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">WhatsApp</a>
           <a href="#planos" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Planos</a>
         </div>
         <Link
@@ -372,8 +374,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* KANBAN */}
-      <section className="bg-gray-50 py-14 md:py-24">
+            {/* KANBAN */}
+      <section id="agenda" className="bg-gray-50 py-14 md:py-24">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-8 md:mb-12">
             <Eyebrow>Fluxo de atendimento</Eyebrow>
@@ -397,8 +399,8 @@ export default function LandingPage() {
         </div>
             </section>
 
-      {/* RELATÓRIO FISCAL E REFORMA TRIBUTÁRIA */}
-      <section className="bg-white py-14 md:py-24 border-t border-gray-100">
+            {/* RELATÓRIO FISCAL E REFORMA TRIBUTÁRIA */}
+      <section id="fiscal" className="bg-white py-14 md:py-24 border-t border-gray-100">
         <div className="max-w-5xl mx-auto px-6 text-center">
           <div className="flex justify-center mb-4">
             <IconBadge cor="green" tamanho="w-14 h-14">
@@ -433,8 +435,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CATÁLOGO DIGITAL */}
-      <section className="bg-white py-14 md:py-24 border-t border-gray-100">
+            {/* CATÁLOGO DIGITAL */}
+      <section id="catalogo-digital" className="bg-white py-14 md:py-24 border-t border-gray-100">
         <div className="max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-14 items-center">
                     <div className="text-center md:text-left">
             <div className="flex items-center gap-2 justify-center md:justify-start mb-3">
@@ -529,8 +531,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-            {/* MENSAGENS INTELIGENTES */}
-      <section className="py-14 md:py-24">
+                  {/* MENSAGENS INTELIGENTES */}
+      <section id="whatsapp" className="py-14 md:py-24">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-8 md:mb-12">
             <Eyebrow>Comunicação com o cliente</Eyebrow>
