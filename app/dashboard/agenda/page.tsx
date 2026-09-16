@@ -71,10 +71,11 @@ export default function AgendaPage() {
   const [itensParaEdicao, setItensParaEdicao] = useState<any[]>([])
   const [itensSelecionadosEdicao, setItensSelecionadosEdicao] = useState<Set<string>>(new Set())
   const [salvandoServico, setSalvandoServico] = useState(false)
-    const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
+       const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
   const [modalReceberAgendamento, setModalReceberAgendamento] = useState<Agendamento | null>(null)
   const [formaPagamentoReceber, setFormaPagamentoReceber] = useState('Dinheiro')
   const [recebendoPagamento, setRecebendoPagamento] = useState(false)
+  const [tenantSlug, setTenantSlug] = useState('')
   const [novaData, setNovaData] = useState('')
   const [novoHorario, setNovoHorario] = useState('')
   const [reagendando, setReagendando] = useState(false)
@@ -112,7 +113,7 @@ export default function AgendaPage() {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('id')
+      .select('id, slug')
       .eq('email', user.email)
       .single()
 
@@ -120,6 +121,7 @@ export default function AgendaPage() {
       setCarregando(false)
       return
     }
+    setTenantSlug(tenant.slug)
 
     const { inicio, fim } = calcularIntervalo()
 
@@ -651,7 +653,7 @@ export default function AgendaPage() {
         </button>
       </div>
 
-      {offsetCalendario !== 0 && (
+            {offsetCalendario !== 0 && (
         <button
           onClick={() => setOffsetCalendario(0)}
           className="text-xs text-blue-600 hover:underline -mt-4 mb-4 block"
@@ -659,6 +661,57 @@ export default function AgendaPage() {
           Voltar para hoje
         </button>
       )}
+
+      {!carregando && periodoFiltro === 'dia' && (() => {
+        const transportesDoDia = agendamentos
+          .filter(a => a.precisa_transporte && a.status !== 'cancelado' && a.status !== 'faltou')
+          .sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime())
+
+        if (transportesDoDia.length === 0) return null
+
+        return (
+          <div className="bg-white border border-cyan-100 rounded-2xl p-4 mb-6 print:hidden">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-900">🚐 Transportes do dia ({transportesDoDia.length})</h3>
+              <div className="flex items-center gap-2">
+                {tenantSlug && (
+                  <a
+                    href={`/motorista/${tenantSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    Acesso do motorista
+                  </a>
+                )}
+                <button
+                  onClick={() => window.print()}
+                  className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  🖨️ Imprimir
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {transportesDoDia.map(t => (
+                <div key={t.id} className="border border-gray-100 rounded-lg p-3 flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {new Date(t.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {t.pets?.nome} ({t.customers?.nome})
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Coleta: {t.endereco_coleta || 'não informado'}
+                    </p>
+                    {t.endereco_entrega && t.endereco_entrega !== t.endereco_coleta && (
+                      <p className="text-xs text-gray-500">Entrega: {t.endereco_entrega}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
                   {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
@@ -781,7 +834,10 @@ export default function AgendaPage() {
                             {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <div className="flex items-center gap-1.5">
-                            {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
+                                                        {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
+                            {a.observacoes && /rotina|estilo|tesoura/i.test(a.observacoes) && (
+                              <span className="text-xs" title="Tosa completa">✂️</span>
+                            )}
                             {!a.pago && Number(a.preco_cobrado || 0) > 0 && (
                               <span className="text-xs" title="Pagamento pendente">💰</span>
                             )}
