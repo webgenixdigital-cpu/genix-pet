@@ -108,7 +108,7 @@ export default function DetalhesClientePage() {
   const [obsPetTexto, setObsPetTexto] = useState('')
   const [salvandoObsPet, setSalvandoObsPet] = useState(false)
 
-  const [editandoCaracteristicasPet, setEditandoCaracteristicasPet] = useState(false)
+    const [editandoCaracteristicasPet, setEditandoCaracteristicasPet] = useState(false)
   const [petNomeEdit, setPetNomeEdit] = useState('')
   const [petEspecieEdit, setPetEspecieEdit] = useState('cachorro')
   const [petPorteEdit, setPetPorteEdit] = useState('medio')
@@ -117,6 +117,7 @@ export default function DetalhesClientePage() {
   const [petPelagemEdit, setPetPelagemEdit] = useState('curta')
   const [petCastradoEdit, setPetCastradoEdit] = useState<boolean | null>(null)
   const [salvandoCaracteristicasPet, setSalvandoCaracteristicasPet] = useState(false)
+  const [racasCatalogo, setRacasCatalogo] = useState<{ id: string; nome: string }[]>([])
 
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -174,6 +175,14 @@ export default function DetalhesClientePage() {
       setEnderecoCidade(clienteData.endereco_cidade || '')
       setEnderecoCep(clienteData.endereco_cep || '')
       setObservacoes(clienteData.observacoes || '')
+
+      const { data: racasData } = await supabase
+        .from('catalogo_racas')
+        .select('id, nome')
+        .eq('tenant_id', clienteData.tenant_id)
+        .order('nome')
+
+      setRacasCatalogo(racasData || [])
     }
 
         setPets(petsData || [])
@@ -669,15 +678,21 @@ export default function DetalhesClientePage() {
                     </select>
                   </div>
                 </div>
-                <div>
+                                <div>
                   <label className="text-xs text-gray-500 mb-1 block">Raca</label>
-                  <input
-                    type="text"
+                  <select
                     value={petRacaEdit}
                     onChange={e => setPetRacaEdit(e.target.value)}
-                    placeholder="SRD, se nao souber"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  >
+                    <option value="">SRD / Sem raca definida (usa porte e pelagem)</option>
+                    {racasCatalogo.map(r => (
+                      <option key={r.id} value={r.nome}>{r.nome}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Lista baseada no catalogo cadastrado. Se o pet nao tiver raca definida, o sistema usa porte e pelagem.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
