@@ -98,6 +98,18 @@ function petEmBranco(): PetNoAgendamento {
   }
 }
 
+function serializarPet(pet: PetNoAgendamento) {
+  return { ...pet, itensSelecionados: Array.from(pet.itensSelecionados) }
+}
+
+function desserializarPet(pet: any): PetNoAgendamento {
+  return { ...pet, itensSelecionados: new Set(pet.itensSelecionados || []) }
+}
+
+function chaveRascunho(tenantId: string) {
+  return `genixpet_rascunho_agendamento_${tenantId}`
+}
+
 const PORTES: { id: PorteId; label: string }[] = [
   { id: 'mini', label: 'Mini (1 a 4 kg)' },
   { id: 'pequeno', label: 'Pequeno (4 a 9 kg)' },
@@ -156,7 +168,9 @@ export default function AgendarPage() {
   const [carregando, setCarregando] = useState(true)
   const [naoEncontrado, setNaoEncontrado] = useState(false)
 
-  const [etapa, setEtapa] = useState(1)
+    const [etapa, setEtapa] = useState(1)
+  const [rascunhoEncontrado, setRascunhoEncontrado] = useState<any | null>(null)
+  const [rascunhoRestaurado, setRascunhoRestaurado] = useState(false)
   const [buscaRaca, setBuscaRaca] = useState('')
   const [modalTosa, setModalTosa] = useState<{ titulo: string; texto: string } | null>(null)
 
@@ -227,6 +241,15 @@ export default function AgendarPage() {
       }
 
       setTenant(tenantData)
+
+      try {
+        const rascunhoSalvo = localStorage.getItem(chaveRascunho(tenantData.id))
+        if (rascunhoSalvo) {
+          setRascunhoEncontrado(JSON.parse(rascunhoSalvo))
+        }
+      } catch {
+        // silencioso
+      }
 
       const { data: racasData } = await supabase
         .from('catalogo_racas')
@@ -307,8 +330,52 @@ export default function AgendarPage() {
       setCarregando(false)
     }
 
-    carregar()
+        carregar()
   }, [slug])
+
+  function restaurarRascunho() {
+    if (!rascunhoEncontrado) return
+    const r = rascunhoEncontrado
+    if (r.nomeCliente !== undefined) setNomeCliente(r.nomeCliente)
+    if (r.telefoneCliente !== undefined) setTelefoneCliente(r.telefoneCliente)
+    if (r.dataSelecionada !== undefined) setDataSelecionada(r.dataSelecionada)
+    if (r.horarioSelecionado !== undefined) setHorarioSelecionado(r.horarioSelecionado)
+    if (r.etapa !== undefined) setEtapa(r.etapa)
+    if (r.precisaTransporte !== undefined) setPrecisaTransporte(r.precisaTransporte)
+    if (r.ruaColeta !== undefined) setRuaColeta(r.ruaColeta)
+    if (r.numeroColeta !== undefined) setNumeroColeta(r.numeroColeta)
+    if (r.bairroColeta !== undefined) setBairroColeta(r.bairroColeta)
+    if (r.cidadeColeta !== undefined) setCidadeColeta(r.cidadeColeta)
+    if (r.ufColeta !== undefined) setUfColeta(r.ufColeta)
+    if (r.cepColeta !== undefined) setCepColeta(r.cepColeta)
+    if (r.formaPagamento !== undefined) setFormaPagamento(r.formaPagamento)
+    if (r.petsConfirmados) setPetsConfirmados(r.petsConfirmados.map(desserializarPet))
+    if (r.petAtual) setPetAtual(desserializarPet(r.petAtual))
+    setRascunhoRestaurado(true)
+    setRascunhoEncontrado(null)
+  }
+
+  function descartarRascunho() {
+    if (tenant) localStorage.removeItem(chaveRascunho(tenant.id))
+    setRascunhoEncontrado(null)
+    setRascunhoRestaurado(true)
+  }
+
+  useEffect(() => {
+    if (!tenant || !rascunhoRestaurado) return
+    const dados = {
+      nomeCliente, telefoneCliente, dataSelecionada, horarioSelecionado, etapa,
+      precisaTransporte, ruaColeta, numeroColeta, bairroColeta, cidadeColeta, ufColeta, cepColeta,
+      formaPagamento,
+      petsConfirmados: petsConfirmados.map(serializarPet),
+      petAtual: serializarPet(petAtual),
+    }
+    try {
+      localStorage.setItem(chaveRascunho(tenant.id), JSON.stringify(dados))
+    } catch {
+      // silencioso
+    }
+  }, [nomeCliente, telefoneCliente, dataSelecionada, horarioSelecionado, etapa, precisaTransporte, ruaColeta, numeroColeta, bairroColeta, cidadeColeta, ufColeta, cepColeta, formaPagamento, petsConfirmados, petAtual, rascunhoRestaurado, tenant])
   
       async function buscarClientePorTelefone(telefoneDigitado: string) {
     setClienteExistente(null)
@@ -1006,6 +1073,10 @@ export default function AgendarPage() {
       }),
     }).catch(() => {})
 
+        if (tenant) {
+      try { localStorage.removeItem(chaveRascunho(tenant.id)) } catch {}
+    }
+
     setSalvandoAgendamento(false)
     setAgendamentoConfirmado(true)
   }
@@ -1040,7 +1111,32 @@ export default function AgendarPage() {
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-6">
+            <div className="max-w-lg mx-auto px-4 py-6">
+        {rascunhoEncontrado && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+            <p className="text-sm font-medium text-amber-800">
+              Encontramos um agendamento em andamento que não foi concluído.
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5 mb-3">
+              Quer continuar de onde parou ou começar um novo?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={descartarRascunho}
+                className="flex-1 border border-amber-300 text-amber-700 text-xs py-2 rounded-lg hover:bg-amber-100 transition-colors"
+              >
+                Comecar novo
+              </button>
+              <button
+                onClick={restaurarRascunho}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-xs py-2 rounded-lg transition-colors"
+              >
+                Continuar de onde parei
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mb-6">
           {[1, 2, 3, 4].map(n => (
             <div
