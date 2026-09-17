@@ -76,6 +76,8 @@ type PetNoAgendamento = {
   petIdExistente: string | null
   porte: PorteId
   pelagem: string
+  sexo: string
+  castrado: boolean | null
   usarFluxoRaca: boolean | null
   racaSelecionada: Raca | null
   itensSelecionados: Set<string>
@@ -91,7 +93,7 @@ function petEmBranco(): PetNoAgendamento {
   return {
     chave: Math.random().toString(36).slice(2),
     nome: '', especie: 'cachorro', petIdExistente: null,
-    porte: 'medio', pelagem: 'curta',
+    porte: 'medio', pelagem: 'curta', sexo: '', castrado: null,
     usarFluxoRaca: null, racaSelecionada: null, itensSelecionados: new Set(),
     planoEscolhido: null, planoAtivarAgora: true,
     checklistNo: null, checklistVacinas: null, checklistAlergia: null, checklistPulgas: null,
@@ -328,7 +330,7 @@ export default function AgendarPage() {
 
     const { data: clientes } = await supabase
       .from('customers')
-      .select('id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem )')
+      .select('id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem, sexo, castrado )')
       .eq('tenant_id', tenant.id)
       .ilike('telefone', `%${telefoneDigitado.replace(/\D/g, '')}%`)
       .limit(6)
@@ -350,7 +352,7 @@ export default function AgendarPage() {
 
     const { data: clientes } = await supabase
       .from('customers')
-      .select('id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem )')
+      .select('id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem, sexo, castrado )')
       .eq('tenant_id', tenant.id)
       .ilike('nome', `%${nomeDigitado.trim()}%`)
       .limit(6)
@@ -460,13 +462,15 @@ export default function AgendarPage() {
 
     const racaCatalogo = racas.find(r => r.nome.toLowerCase() === (pet.raca || '').toLowerCase())
 
-            setPetAtual({
+                       setPetAtual({
       chave: Math.random().toString(36).slice(2),
       nome: pet.nome,
       especie: pet.especie || 'cachorro',
       petIdExistente: pet.id,
       porte: pet.porte || 'medio',
       pelagem: pet.pelagem || 'curta',
+      sexo: pet.sexo || '',
+      castrado: pet.castrado ?? null,
       usarFluxoRaca: racaCatalogo ? true : false,
       racaSelecionada: racaCatalogo || null,
       itensSelecionados: new Set(),
@@ -771,17 +775,23 @@ export default function AgendarPage() {
     for (const pet of petsConfirmados) {
       let petId = pet.petIdExistente
 
+      const dadosPet = {
+        nome: pet.nome,
+        especie: pet.especie,
+        porte: pet.porte,
+        pelagem: pet.pelagem,
+        sexo: pet.sexo || null,
+        castrado: pet.castrado,
+        raca: pet.usarFluxoRaca ? pet.racaSelecionada?.nome : null,
+      }
+
       if (!petId) {
         const { data: novoPet, error: erroPet } = await supabase
           .from('pets')
           .insert({
             tenant_id: tenant.id,
             customer_id: clienteId,
-            nome: pet.nome,
-            especie: pet.especie,
-            porte: pet.porte,
-            pelagem: pet.pelagem,
-            raca: pet.usarFluxoRaca ? pet.racaSelecionada?.nome : null,
+            ...dadosPet,
           })
           .select('id')
           .single()
@@ -791,6 +801,11 @@ export default function AgendarPage() {
           break
         }
         petId = novoPet.id
+      } else {
+        await supabase
+          .from('pets')
+          .update(dadosPet)
+          .eq('id', petId)
       }
 
             if (!primeiroPetNome) primeiroPetNome = pet.nome
