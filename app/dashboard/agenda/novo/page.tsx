@@ -405,21 +405,44 @@ export default function AgendarPage() {
     setClienteExistente(null)
     setPetsDoCliente([])
 
-    if (!tenant || nomeDigitado.trim().length < 3) {
+    const termo = nomeDigitado.trim()
+    if (!tenant || termo.length < 3) {
       setSugestoesClientes([])
       return
     }
 
     setBuscandoCliente(true)
 
-        const { data: clientes } = await supabase
+    const colunasCliente = 'id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem, sexo, castrado )'
+
+    const { data: porNomeCliente } = await supabase
       .from('customers')
-      .select('id, nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep, pets ( id, nome, especie, porte, raca, pelagem, sexo, castrado )')
+      .select(colunasCliente)
       .eq('tenant_id', tenant.id)
-      .ilike('nome', `%${nomeDigitado.trim()}%`)
+      .ilike('nome', `%${termo}%`)
       .limit(6)
 
-    setSugestoesClientes(clientes || [])
+    const { data: petsEncontrados } = await supabase
+      .from('pets')
+      .select('customer_id')
+      .eq('tenant_id', tenant.id)
+      .ilike('nome', `%${termo}%`)
+      .limit(6)
+
+    let porNomePet: any[] = []
+    const idsClientesPorPet = Array.from(new Set((petsEncontrados || []).map((p: any) => p.customer_id)))
+    if (idsClientesPorPet.length > 0) {
+      const { data } = await supabase
+        .from('customers')
+        .select(colunasCliente)
+        .in('id', idsClientesPorPet)
+      porNomePet = data || []
+    }
+
+    const combinados = [...(porNomeCliente || []), ...porNomePet]
+    const unicos = Array.from(new Map(combinados.map((c: any) => [c.id, c])).values()).slice(0, 6)
+
+    setSugestoesClientes(unicos as any)
     setBuscandoCliente(false)
   }
 
