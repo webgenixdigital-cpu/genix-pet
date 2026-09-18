@@ -71,11 +71,40 @@ export default function AgendaPage() {
   const [itensParaEdicao, setItensParaEdicao] = useState<any[]>([])
   const [itensSelecionadosEdicao, setItensSelecionadosEdicao] = useState<Set<string>>(new Set())
   const [salvandoServico, setSalvandoServico] = useState(false)
-       const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
+           const [modalReagendar, setModalReagendar] = useState<Agendamento | null>(null)
   const [modalReceberAgendamento, setModalReceberAgendamento] = useState<Agendamento | null>(null)
   const [formaPagamentoReceber, setFormaPagamentoReceber] = useState('Dinheiro')
   const [recebendoPagamento, setRecebendoPagamento] = useState(false)
   const [tenantSlug, setTenantSlug] = useState('')
+  const [transporteChecked, setTransporteChecked] = useState(false)
+  const [enderecoColetaModal, setEnderecoColetaModal] = useState('')
+  const [enderecoEntregaModal, setEnderecoEntregaModal] = useState('')
+  const [salvandoTransporteModal, setSalvandoTransporteModal] = useState(false)
+
+  useEffect(() => {
+    if (infoAberto) {
+      setTransporteChecked(!!infoAberto.precisa_transporte)
+      setEnderecoColetaModal(infoAberto.endereco_coleta || '')
+      setEnderecoEntregaModal(infoAberto.endereco_entrega || '')
+    }
+  }, [infoAberto?.id])
+
+  async function salvarTransporteModal() {
+    if (!infoAberto) return
+    setSalvandoTransporteModal(true)
+
+    await supabase
+      .from('appointments')
+      .update({
+        precisa_transporte: transporteChecked,
+        endereco_coleta: transporteChecked ? enderecoColetaModal : null,
+        endereco_entrega: transporteChecked ? (enderecoEntregaModal || enderecoColetaModal) : null,
+      })
+      .eq('id', infoAberto.id)
+
+    setSalvandoTransporteModal(false)
+    carregarAgendamentos()
+  }
   const [novaData, setNovaData] = useState('')
   const [novoHorario, setNovoHorario] = useState('')
   const [reagendando, setReagendando] = useState(false)
@@ -669,11 +698,11 @@ export default function AgendaPage() {
 
         if (transportesDoDia.length === 0) return null
 
-        return (
-          <div className="bg-white border border-cyan-100 rounded-2xl p-4 mb-6 print:hidden">
+                return (
+          <div className="bg-white border border-cyan-100 rounded-2xl p-4 mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-gray-900">🚐 Transportes do dia ({transportesDoDia.length})</h3>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 print:hidden">
                 {tenantSlug && (
                   <a
                     href={`/motorista/${tenantSlug}`}
@@ -1224,29 +1253,65 @@ export default function AgendaPage() {
                 </button>
               </div>
 
-              {infoAberto.precisa_transporte && (
-                <div className="border border-gray-200 rounded-lg">
-                  <button
-                    onClick={() => setMostrarTransporteModal(!mostrarTransporteModal)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-left"
-                  >
-                    <span className="text-xs font-medium text-gray-700">🚐 Endereco de transporte</span>
-                    <span className="text-xs text-gray-400">{mostrarTransporteModal ? '▲' : '▼'}</span>
-                  </button>
-                  {mostrarTransporteModal && (
-                    <div className="px-3 pb-3 flex flex-col gap-2">
-                      <div>
-                        <p className="text-xs text-gray-400">Endereco de coleta</p>
-                        <p className="text-gray-900 text-sm">{infoAberto.endereco_coleta}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400">Endereco de entrega</p>
-                        <p className="text-gray-900 text-sm">{infoAberto.endereco_entrega}</p>
-                      </div>
+              <div className="border border-gray-200 rounded-lg p-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={transporteChecked}
+                    onChange={e => setTransporteChecked(e.target.checked)}
+                  />
+                  🚐 Precisa de transporte
+                </label>
+
+                {transporteChecked && (
+                  <div className="flex flex-col gap-2 mt-3">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Endereco de coleta</label>
+                      <input
+                        type="text"
+                        value={enderecoColetaModal}
+                        onChange={e => setEnderecoColetaModal(e.target.value)}
+                        placeholder="Rua, numero, bairro, cidade"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     </div>
-                  )}
-                </div>
-              )}
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Endereco de entrega (se diferente)</label>
+                      <input
+                        type="text"
+                        value={enderecoEntregaModal}
+                        onChange={e => setEnderecoEntregaModal(e.target.value)}
+                        placeholder="Deixe em branco se for o mesmo da coleta"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {(() => {
+                      const outrosPetsMesmoTutor = agendamentos.filter(a =>
+                        a.customer_id === infoAberto.customer_id &&
+                        a.id !== infoAberto.id &&
+                        a.status !== 'cancelado' && a.status !== 'faltou'
+                      )
+                      if (outrosPetsMesmoTutor.length === 0) return null
+                      return (
+                        <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
+                          <p className="text-xs text-amber-700">
+                            🐾 Este tutor tambem tem hoje: {outrosPetsMesmoTutor.map(a => a.pets?.nome).join(', ')} — considere combinar no mesmo transporte.
+                          </p>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+
+                <button
+                  onClick={salvarTransporteModal}
+                  disabled={salvandoTransporteModal}
+                  className="w-full mt-3 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {salvandoTransporteModal ? 'Salvando...' : 'Salvar transporte'}
+                </button>
+              </div>
 
               <div className="border border-gray-200 rounded-lg">
                 <button
