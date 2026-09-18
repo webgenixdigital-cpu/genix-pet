@@ -81,10 +81,14 @@ export default function AgendaPage() {
   const [enderecoEntregaModal, setEnderecoEntregaModal] = useState('')
   const [salvandoTransporteModal, setSalvandoTransporteModal] = useState(false)
 
-  useEffect(() => {
+    useEffect(() => {
     if (infoAberto) {
       setTransporteChecked(!!infoAberto.precisa_transporte)
-      setEnderecoColetaModal(infoAberto.endereco_coleta || '')
+      const cliente = infoAberto.customers as any
+      const enderecoCliente = cliente?.endereco_rua
+        ? `${cliente.endereco_rua}, ${cliente.endereco_numero || ''}${cliente.endereco_bairro ? ', ' + cliente.endereco_bairro : ''}, ${cliente.endereco_cidade || ''}`
+        : ''
+      setEnderecoColetaModal(infoAberto.endereco_coleta || enderecoCliente)
       setEnderecoEntregaModal(infoAberto.endereco_entrega || '')
     }
   }, [infoAberto?.id])
@@ -101,6 +105,14 @@ export default function AgendaPage() {
         endereco_entrega: transporteChecked ? (enderecoEntregaModal || enderecoColetaModal) : null,
       })
       .eq('id', infoAberto.id)
+
+    const clienteAtual = infoAberto.customers as any
+    if (transporteChecked && enderecoColetaModal && !clienteAtual?.endereco_rua) {
+      await supabase
+        .from('customers')
+        .update({ endereco_rua: enderecoColetaModal })
+        .eq('id', infoAberto.customer_id)
+    }
 
     setSalvandoTransporteModal(false)
     carregarAgendamentos()
@@ -154,11 +166,11 @@ export default function AgendaPage() {
 
     const { inicio, fim } = calcularIntervalo()
 
-        const { data } = await supabase
+                const { data } = await supabase
       .from('appointments')
       .select(`
                                        id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago, is_recorrente, customer_package_id,
-        customers ( nome, telefone ),
+        customers ( nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep ),
         pets ( nome ),
         professionals ( nome, cor_agenda )
       `)
