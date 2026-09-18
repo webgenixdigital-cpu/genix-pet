@@ -1459,7 +1459,8 @@ export default function AgendarPage() {
                     </div>
                   )}
 
-                  {(['principal', 'adicional', 'combo'] as const).map(grupo => {
+
+                  {(['combo', 'principal', 'adicional'] as const).map(grupo => {
                     const itens = itensDisponiveis.filter(i => i.grupo === grupo)
                     if (itens.length === 0) return null
                     const titulo = grupo === 'principal' ? 'Banho e Tosa' : grupo === 'adicional' ? 'Adicionais' : 'Combos'

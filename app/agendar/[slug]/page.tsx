@@ -165,6 +165,8 @@ export default function AgendarPage() {
   const [nomeCliente, setNomeCliente] = useState('')
   const [telefoneCliente, setTelefoneCliente] = useState('')
   const [clienteExistente, setClienteExistente] = useState<any>(null)
+  const [possuiCadastro, setPossuiCadastro] = useState<boolean | null>(null)
+  const [criandoSemBusca, setCriandoSemBusca] = useState(false)
   const [sugestoesClientes, setSugestoesClientes] = useState<any[]>([])
   const [petsDoCliente, setPetsDoCliente] = useState<any[]>([])
   const [buscandoCliente, setBuscandoCliente] = useState(false)
@@ -1076,64 +1078,141 @@ export default function AgendarPage() {
           <div>
             <h2 className="text-sm font-medium text-gray-900 mb-4">Seus dados</h2>
 
-                        <div className="flex flex-col gap-4">
+            {possuiCadastro === null ? (
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">Seu nome</label>
-                <input
-                  type="text"
-                  value={nomeCliente}
-                  onChange={e => {
-                    setNomeCliente(e.target.value)
-                    buscarClientePorNome(e.target.value)
-                  }}
-                  placeholder="Maria Silva"
-                  disabled={!!clienteExistente}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                />
-                {buscandoCliente && <p className="text-xs text-gray-400 mt-1">Verificando...</p>}
-
-                {sugestoesClientes.length > 0 && !clienteExistente && (
-                  <div className="border border-gray-200 rounded-lg mt-1 overflow-hidden">
-                    {sugestoesClientes.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => selecionarClienteExistente(c)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                      >
-                        {c.nome}{c.pets?.length > 0 && ` — ${c.pets.map((p: any) => p.nome).join(', ')}`} • {c.telefone}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {clienteExistente && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Bem-vindo de volta, {clienteExistente.nome}! 🐾
-                  </p>
-                )}
+                <p className="text-sm text-gray-700 mb-3">Voce ja e cliente cadastrado?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPossuiCadastro(true)}
+                    className="flex-1 border border-gray-200 rounded-xl p-4 text-center hover:border-blue-300 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-gray-900">Sim, ja sou cliente</p>
+                  </button>
+                  <button
+                    onClick={() => setPossuiCadastro(false)}
+                    className="flex-1 border border-gray-200 rounded-xl p-4 text-center hover:border-blue-300 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-gray-900">Nao, primeira vez</p>
+                  </button>
+                </div>
               </div>
+            ) : possuiCadastro === true ? (
+              <div className="flex flex-col gap-4">
+                <button onClick={() => { setPossuiCadastro(null); setClienteExistente(null); setSugestoesClientes([]) }} className="text-xs text-blue-600 hover:underline text-left">
+                  ← Voltar
+                </button>
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">Seu telefone</label>
+                  <input
+                    type="text"
+                    value={telefoneCliente}
+                    onChange={e => {
+                      setTelefoneCliente(e.target.value)
+                      buscarClientePorTelefone(e.target.value)
+                    }}
+                    placeholder="(35) 99999-9999"
+                    disabled={!!clienteExistente}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                  {buscandoCliente && <p className="text-xs text-gray-400 mt-1">Verificando...</p>}
 
+                  {sugestoesClientes.length > 0 && !clienteExistente && (
+                    <div className="border border-gray-200 rounded-lg mt-1 overflow-hidden">
+                      {sugestoesClientes.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => selecionarClienteExistente(c)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                        >
+                          {c.nome} • {c.telefone}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {clienteExistente && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Bem-vindo de volta, {clienteExistente.nome}! 🐾
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">Seu nome</label>
+                  <input
+                    type="text"
+                    value={nomeCliente}
+                    onChange={e => setNomeCliente(e.target.value)}
+                    placeholder="Maria Silva"
+                    disabled={!!clienteExistente}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+
+                <button
+                  onClick={() => setEtapa(2)}
+                  disabled={!nomeCliente || !telefoneCliente}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-2"
+                >
+                  Continuar
+                </button>
+              </div>
+            ) : !criandoSemBusca ? (
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">Telefone</label>
-                <input
-                  type="text"
-                  value={telefoneCliente}
-                  onChange={e => setTelefoneCliente(e.target.value)}
-                  placeholder="(35) 99999-9999"
-                  disabled={!!clienteExistente}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                />
+                <button onClick={() => setPossuiCadastro(null)} className="text-xs text-blue-600 hover:underline mb-3 block">
+                  ← Voltar
+                </button>
+                <p className="text-sm text-gray-700 mb-3">Sem problemas! Como prefere continuar?</p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => setCriandoSemBusca(true)}
+                    className="border border-gray-200 rounded-xl p-4 text-left hover:border-blue-300 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-gray-900">Criar meu cadastro agora</p>
+                    <p className="text-xs text-gray-400">Fica salvo para os proximos agendamentos</p>
+                  </button>
+                  <button
+                    onClick={() => setCriandoSemBusca(true)}
+                    className="border border-gray-200 rounded-xl p-4 text-left hover:border-blue-300 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-gray-900">Agendar sem cadastro</p>
+                    <p className="text-xs text-gray-400">So o essencial, sem compromisso</p>
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">Seu nome</label>
+                  <input
+                    type="text"
+                    value={nomeCliente}
+                    onChange={e => setNomeCliente(e.target.value)}
+                    placeholder="Maria Silva"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">Telefone</label>
+                  <input
+                    type="text"
+                    value={telefoneCliente}
+                    onChange={e => setTelefoneCliente(e.target.value)}
+                    placeholder="(35) 99999-9999"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-              <button
-                onClick={() => setEtapa(2)}
-                disabled={!nomeCliente || !telefoneCliente}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-2"
+                              <button
+                  onClick={() => setEtapa(2)}
+                  disabled={!nomeCliente || !telefoneCliente}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 mt-2"
               >
                 Continuar
               </button>
             </div>
+            )}
           </div>
         )}
         
@@ -1345,7 +1424,7 @@ export default function AgendarPage() {
                     </div>
                   )}
 
-                  {(['principal', 'adicional', 'combo'] as const).map(grupo => {
+                  {(['combo', 'principal', 'adicional'] as const).map(grupo => {
                     const itens = itensDisponiveis.filter(i => i.grupo === grupo)
                     if (itens.length === 0) return null
                     const titulo = grupo === 'principal' ? 'Banho e Tosa' : grupo === 'adicional' ? 'Adicionais' : 'Combos'

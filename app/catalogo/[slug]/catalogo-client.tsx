@@ -947,11 +947,11 @@ function StepServicosRaca({
   onToggle: (item: RacaItem) => void;
   onEnviar: () => void;
 }) {
-  const grupos: { chave: RacaItem["grupo"]; titulo: string }[] = [
+    const grupos: { chave: RacaItem["grupo"]; titulo: string }[] = [
+    { chave: "combo", titulo: "Combos" },
     { chave: "principal", titulo: "Banho e Tosa" },
     { chave: "adicional", titulo: "Serviços adicionais" },
-    { chave: "combo", titulo: "Combos" },
-  ];
+  ]
 
   return (
     <div>
@@ -1025,11 +1025,11 @@ function StepServicosPorte({
   onToggle: (item: PorteItem) => void;
   onEnviar: () => void;
 }) {
-  const grupos: { chave: PorteItem["grupo"]; titulo: string }[] = [
+    const grupos: { chave: PorteItem["grupo"]; titulo: string }[] = [
+    { chave: "combo", titulo: "Combos" },
     { chave: "principal", titulo: "Banho e Tosa" },
     { chave: "adicional", titulo: "Serviços adicionais" },
-    { chave: "combo", titulo: "Combos" },
-  ];
+  ]
 
   return (
     <div>
