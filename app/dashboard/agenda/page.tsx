@@ -26,7 +26,6 @@ type Agendamento = {
 }
 
 const COLUNAS = [
-  { status: 'em_espera', label: 'Aguardando aprovacao', cor: 'bg-yellow-100', borda: 'border-yellow-400', destaque: true },
   { status: 'agendado', label: 'Agendado', cor: 'bg-gray-100', borda: 'border-gray-300', destaque: false },
   { status: 'confirmado', label: 'Confirmado', cor: 'bg-blue-100', borda: 'border-blue-400', destaque: false },
   { status: 'em_atendimento', label: 'Em atendimento', cor: 'bg-purple-100', borda: 'border-purple-400', destaque: false },
@@ -169,7 +168,7 @@ export default function AgendaPage() {
                 const { data } = await supabase
       .from('appointments')
       .select(`
-                                       id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago, is_recorrente, customer_package_id,
+                                       id, inicio, fim, status, preco_cobrado, precisa_transporte, endereco_coleta, endereco_entrega, customer_id, service_id, pet_id, observacoes, notas_internas, pago, is_recorrente, customer_package_id, origem,
         customers ( nome, telefone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_cep ),
         pets ( nome ),
         professionals ( nome, cor_agenda )
@@ -650,15 +649,15 @@ export default function AgendaPage() {
         ))}
       </div>
 
-      <div className="flex items-center gap-2 mb-6">
+                  <div className="flex items-center gap-2 mb-6">
         <button
           onClick={() => setOffsetCalendario(o => o - 7)}
-          className="flex-shrink-0 w-8 h-16 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-blue-300 transition-colors"
+          className="flex-shrink-0 w-6 h-12 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-blue-300 transition-colors text-sm"
         >
           ‹
         </button>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 flex-1">
           {Array.from({ length: 14 }).map((_, i) => {
             const data = new Date()
             data.setDate(data.getDate() + offsetCalendario + i)
@@ -672,15 +671,15 @@ export default function AgendaPage() {
               <button
                 key={dataISO}
                 onClick={() => setDataFiltro(dataISO)}
-                className={`flex flex-col items-center justify-center flex-shrink-0 w-14 h-16 rounded-xl border transition-colors ${
+                className={`flex flex-col items-center justify-center flex-shrink-0 w-11 h-12 rounded-lg border transition-colors ${
                   selecionado
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
                 }`}
               >
-                <span className="text-[10px] uppercase">{diaSemana}</span>
-                <span className="text-base font-semibold">{diaMes}</span>
-                <span className="text-[9px] uppercase opacity-70">{mesAbrev}</span>
+                <span className="text-[8px] uppercase">{diaSemana}</span>
+                <span className="text-sm font-semibold">{diaMes}</span>
+                <span className="text-[7px] uppercase opacity-70">{mesAbrev}</span>
               </button>
             )
           })}
@@ -688,12 +687,12 @@ export default function AgendaPage() {
 
         <button
           onClick={() => setOffsetCalendario(o => o + 7)}
-          className="flex-shrink-0 w-8 h-16 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-blue-300 transition-colors"
+          className="flex-shrink-0 w-6 h-12 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-blue-300 transition-colors text-sm"
         >
           ›
         </button>
       </div>
-
+            
             {offsetCalendario !== 0 && (
         <button
           onClick={() => setOffsetCalendario(0)}
@@ -842,8 +841,8 @@ export default function AgendaPage() {
           </div>
         </div>
       ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:overflow-visible overflow-x-auto lg:min-w-0">
-          {COLUNAS.map(coluna => {
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:overflow-visible overflow-x-auto lg:min-w-0">
+        {COLUNAS.map(coluna => {
             const itens = agendamentos.filter(a => a.status === coluna.status)
             return (
               <div key={coluna.status} className="flex flex-col">
@@ -868,138 +867,35 @@ export default function AgendaPage() {
                     >
                       <button
                         onClick={() => { setInfoAberto(a); setNotasInternas(a.notas_internas || '') }}
-                        className="text-left w-full"
+                        className="w-full flex items-center gap-2 bg-white border border-gray-100 hover:border-blue-300 rounded-lg px-2.5 py-2 text-left transition-colors"
                       >
-                                               <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-medium text-gray-900">
-                            {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                                                        {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
-                            {a.observacoes && /rotina|estilo|tesoura/i.test(a.observacoes) && (
-                              <span className="text-xs" title="Tosa completa">✂️</span>
-                            )}
-                            {!a.pago && Number(a.preco_cobrado || 0) > 0 && (
-                              <span className="text-xs" title="Pagamento pendente">💰</span>
-                            )}
-                            {a.is_recorrente && <span className="text-xs" title="Faz parte de um plano recorrente">🔁</span>}
-                            {a.precisa_transporte && <span className="text-xs">🚐</span>}
-                            <div
-                              className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0"
-                              style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
-                            >
-                              {a.professionals?.nome?.charAt(0).toUpperCase() || '?'}
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-sm font-medium text-gray-900 truncate">{a.pets?.nome}</p>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-xs text-gray-400 truncate">{a.customers?.nome}</p>
-                          {(() => {
-                            const ultimoStatus = agendamentos
-                              .filter(x => x.pet_id === a.pet_id && x.id !== a.id && new Date(x.inicio) < new Date(a.inicio))
-                              .sort((x, y) => new Date(y.inicio).getTime() - new Date(x.inicio).getTime())[0]
-                            if (!ultimoStatus || !['concluido', 'faltou'].includes(ultimoStatus.status)) return null
-                            return ultimoStatus.status === 'concluido' ? (
-                              <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium" title="Compareceu na ultima visita">
-                                ✓ Compareceu
-                              </span>
-                            ) : (
-                              <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-medium" title="Faltou na ultima visita">
-                                ✕ Faltou
-                              </span>
-                            )
-                          })()}
-                        </div>
-                        {pacotesPorPet[a.pet_id] && (
-                          pacotesPorPet[a.pet_id].usadas + 1 > pacotesPorPet[a.pet_id].total ? (
-                            <a  
-                              href="/dashboard/caixa"
-                              onClick={e => e.stopPropagation()}
-                              className="mt-1.5 flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 hover:bg-red-100 transition-colors"
-                            >
-                              <span className="text-[10px] font-semibold text-red-700">🔴 Plano esgotado — Renovar</span>
-                              <span className="text-[9px] text-red-500">Ir ao Caixa →</span>
-                            </a>
-                          ) : (
-                            <div className="mt-1.5 bg-purple-50 border border-purple-100 rounded-lg px-2 py-1 text-center">
-                              <span className="text-[10px] font-semibold text-purple-700">
-                                🎁 Banho {pacotesPorPet[a.pet_id].usadas + 1} de {pacotesPorPet[a.pet_id].total}
-                              </span>
-                            </div>
-                          )
-                        )}
-                      </button>
-
-                      {a.status === 'concluido' ? (
-                        <div className="mt-2 pt-2 border-t border-gray-100">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs text-gray-500">
-                              R$ {Number(a.preco_cobrado || 0).toFixed(2).replace('.', ',')}
-                            </p>
-                            {a.pago ? (
-                              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Pago</span>
-                            ) : (
-                              <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">Pendente</span>
-                            )}
-                          </div>
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={() => enviarFatura(a)}
-                              className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 text-[11px] py-1.5 rounded-lg transition-colors"
-                            >
-                              📤 Avisar tutor
-                            </button>
-                            {!a.pago && (
-                              <button
-                                onClick={() => marcarComoPago(a.id)}
-                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
-                              >
-                                ✓ Finalizado
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2 mt-2">
-                          {a.status === 'em_espera' ? (
-                            <>
-                              <button
-                                onClick={() => aprovarAgendamento(a)}
-                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
-                              >
-                                ✓ Aprovar
-                              </button>
-                              <button
-                                onClick={() => recusarAgendamento(a.id)}
-                                className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] py-1.5 rounded-lg transition-colors"
-                              >
-                                ✕ Recusar
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              {PROXIMO_STATUS[a.status] && (
-                                <button
-                                  onClick={() => avancarStatus(a.id, a.status)}
-                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] py-1.5 rounded-lg transition-colors"
-                                >
-                                  Avancar →
-                                </button>
-                              )}
-                              {a.status !== 'concluido' && (
-                                <button
-                                  onClick={() => marcarFalta(a.id)}
-                                  className="text-[11px] text-red-500 hover:underline px-2"
-                                >
-                                  Faltou
-                                </button>
-                              )}
-                            </>
+                        <span className="text-xs font-medium text-gray-900 flex-shrink-0 w-9">
+                          {new Date(a.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: a.professionals?.cor_agenda || '#94a3b8' }}
+                        />
+                        <span className="text-sm font-medium text-gray-900 truncate flex-shrink-0 max-w-[38%]">{a.pets?.nome}</span>
+                        <span className="text-xs text-gray-400 truncate flex-1">{a.customers?.nome}</span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(a as any).origem === 'online' && <span className="text-xs" title="Catalogo publico">🌐</span>}
+                          {!a.observacoes && <span className="text-xs" title="Servico nao definido">⚠️</span>}
+                          {a.observacoes && /rotina|estilo|tesoura/i.test(a.observacoes) && <span className="text-xs" title="Tosa completa">✂️</span>}
+                          {!a.pago && Number(a.preco_cobrado || 0) > 0 && <span className="text-xs" title="Pagamento pendente">💰</span>}
+                          {a.is_recorrente && <span className="text-xs" title="Plano recorrente">🔁</span>}
+                          {a.precisa_transporte && <span className="text-xs" title="Precisa de transporte">🚐</span>}
+                          {pacotesPorPet[a.pet_id] && pacotesPorPet[a.pet_id].usadas + 1 > pacotesPorPet[a.pet_id].total && (
+                            <span className="text-xs" title="Plano esgotado — renovar">🔴</span>
                           )}
-                        </div>
-                      )}
-                                        </div>
+                          {a.status === 'concluido' && (
+                            a.pago
+                              ? <span className="text-xs" title="Pago">✓</span>
+                              : <span className="text-xs" title="Pagamento pendente">💰</span>
+                          )}
+                                                                     </div>
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1499,10 +1395,10 @@ export default function AgendaPage() {
               >
                 {salvandoServico ? 'Salvando...' : 'Salvar servicos'}
               </button>
-            </div>
+                       </div>
           </div>
         </div>
-      )}
+           )}
     </div>
   )
 }

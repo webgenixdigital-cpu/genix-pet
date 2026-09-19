@@ -1459,7 +1459,6 @@ export default function AgendarPage() {
                     </div>
                   )}
 
-
                   {(['combo', 'principal', 'adicional'] as const).map(grupo => {
                     const itens = itensDisponiveis.filter(i => i.grupo === grupo)
                     if (itens.length === 0) return null
