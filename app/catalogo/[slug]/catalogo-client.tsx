@@ -46,6 +46,7 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
   const [clienteReconhecido, setClienteReconhecido] = useState<ClienteReconhecido | null>(null);
   const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [candidatosNome, setCandidatosNome] = useState<ClienteReconhecido[]>([]);
+  const [jaECadastrado, setJaECadastrado] = useState<boolean | null>(null);
   const [petSelecionadoIdentificado, setPetSelecionadoIdentificado] = useState<string | null>(null);
   const [racaSelecionada, setRacaSelecionada] = useState<Raca | null>(null);
   const [porteSelecionado, setPorteSelecionado] = useState<(typeof portes)[number] | null>(null);
@@ -63,30 +64,6 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
   }
 
  // -------------------- identificacao do cliente --------------------
-  async function buscarClientePorNome() {
-    const nomeDigitado = nomeCliente.trim();
-    if (nomeDigitado.length < 3) return;
-
-    setBuscandoCliente(true);
-    setClienteReconhecido(null);
-    setCandidatosNome([]);
-
-    const { data } = await supabasePublico
-      .from("customers")
-      .select("id, nome, telefone, pets ( id, nome, raca, porte )")
-      .eq("tenant_id", dados.tenantId)
-      .ilike("nome", `%${nomeDigitado}%`);
-
-    if (data && data.length === 1) {
-      setClienteReconhecido(data[0] as any);
-      setNomeCliente(data[0].nome);
-    } else if (data && data.length > 1) {
-      setCandidatosNome(data as any);
-    }
-
-    setBuscandoCliente(false);
-  }
-
   async function buscarClientePorTelefone() {
     const telefoneNumeros = telefoneCliente.replace(/\D/g, "");
     if (telefoneNumeros.length < 8) return;
@@ -110,13 +87,7 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
     setBuscandoCliente(false);
   }
 
-  function selecionarCandidatoNome(candidato: ClienteReconhecido) {
-    setClienteReconhecido(candidato);
-    setNomeCliente(candidato.nome);
-    setCandidatosNome([]);
-  }
-
-    function continuarSemIdentificar() {
+      function continuarSemIdentificar() {
     irPara("inicio");
   }
 
@@ -380,17 +351,16 @@ export default function CatalogoClient({ dados, portes, pelagens }: Props) {
           )}
 
                     {passo === "identificacao" && (
-            <StepIdentificacao
+                        <StepIdentificacao
               telefone={telefoneCliente}
               nome={nomeCliente}
               onTelefoneChange={setTelefoneCliente}
               onNomeChange={setNomeCliente}
-              onBuscarNome={buscarClientePorNome}
               onBuscarTelefone={buscarClientePorTelefone}
               buscando={buscandoCliente}
               clienteReconhecido={clienteReconhecido}
-              candidatosNome={candidatosNome}
-              onSelecionarCandidato={selecionarCandidatoNome}
+              jaECadastrado={jaECadastrado}
+              onDefinirJaECadastrado={setJaECadastrado}
               onContinuar={continuarComIdentificacao}
               onPular={continuarSemIdentificar}
             />
@@ -496,12 +466,11 @@ function StepIdentificacao({
   nome,
   onTelefoneChange,
   onNomeChange,
-  onBuscarNome,
   onBuscarTelefone,
   buscando,
   clienteReconhecido,
-  candidatosNome,
-  onSelecionarCandidato,
+  jaECadastrado,
+  onDefinirJaECadastrado,
   onContinuar,
   onPular,
 }: {
@@ -509,57 +478,66 @@ function StepIdentificacao({
   nome: string;
   onTelefoneChange: (v: string) => void;
   onNomeChange: (v: string) => void;
-  onBuscarNome: () => void;
   onBuscarTelefone: () => void;
   buscando: boolean;
   clienteReconhecido: ClienteReconhecido | null;
-  candidatosNome: ClienteReconhecido[];
-  onSelecionarCandidato: (c: ClienteReconhecido) => void;
+  jaECadastrado: boolean | null;
+  onDefinirJaECadastrado: (v: boolean) => void;
   onContinuar: () => void;
   onPular: () => void;
 }) {
+  if (jaECadastrado === null) {
+    return (
+      <div>
+        <h2 className="text-lg font-bold mb-1">Bem-vindo! 👋</h2>
+        <p className="text-sm text-slate-500 mb-5">Voce ja e cliente cadastrado?</p>
+
+        <div className="flex flex-col gap-2.5 mb-2">
+          <button
+            onClick={() => onDefinirJaECadastrado(true)}
+            className="w-full border-2 border-slate-200 rounded-xl px-4 py-3.5 text-left font-semibold hover:border-blue-600 hover:bg-blue-50 transition"
+          >
+            Sim, ja sou cadastrado
+          </button>
+          <button
+            onClick={() => onDefinirJaECadastrado(false)}
+            className="w-full border-2 border-slate-200 rounded-xl px-4 py-3.5 text-left font-semibold hover:border-blue-600 hover:bg-blue-50 transition"
+          >
+            Nao, sou cliente novo
+          </button>
+        </div>
+        <button onClick={onPular} className="w-full text-slate-400 text-sm py-2 hover:text-slate-600">
+          Pular esta etapa
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <h2 className="text-lg font-bold mb-1">Bem-vindo! 👋</h2>
+      <BackButton onClick={() => onDefinirJaECadastrado(null as any)} />
+      <h2 className="text-lg font-bold mb-1">
+        {jaECadastrado ? "Que bom te ver de novo! 👋" : "Vamos te cadastrar 👋"}
+      </h2>
       <p className="text-sm text-slate-500 mb-5">
-        Informe seu nome para agilizarmos seu proximo atendimento (opcional).
+        {jaECadastrado
+          ? "Informe seu telefone para localizarmos seu cadastro."
+          : "Informe seu nome e telefone (opcional)."}
       </p>
 
-      <div className="mb-4">
-        <label className="text-sm font-semibold mb-1.5 block">Seu nome</label>
-        <input
-          type="text"
-          value={nome}
-          onChange={(e) => onNomeChange(e.target.value)}
-          onBlur={onBuscarNome}
-          placeholder="Maria Silva"
-          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
-          autoFocus
-        />
-        {buscando && <p className="text-xs text-slate-400 mt-1.5">Verificando...</p>}
-      </div>
-
-      {candidatosNome.length > 1 && (
+      {jaECadastrado && (
         <div className="mb-4">
-          <p className="text-sm font-semibold mb-2">Encontramos mais de um cadastro com esse nome. Qual e o seu?</p>
-          <div className="flex flex-col gap-2">
-                        {candidatosNome.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => onSelecionarCandidato(c)}
-                className="text-left border-2 border-slate-200 rounded-xl px-4 py-3 text-sm hover:border-blue-600 transition-colors"
-              >
-                <span className="font-medium">{c.nome}</span>
-                {c.pets.length > 0 && (
-                  <span className="text-slate-500 ml-2">— {c.pets.map((p) => p.nome).join(", ")}</span>
-                )}
-                <span className="text-slate-400 ml-2">{mascararTelefone(c.telefone)}</span>
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-slate-400 mt-2">
-            Nenhum desses e voce? Preencha o telefone abaixo para continuar como novo cliente.
-          </p>
+          <label className="text-sm font-semibold mb-1.5 block">Seu telefone</label>
+          <input
+            type="text"
+            value={telefone}
+            onChange={(e) => onTelefoneChange(e.target.value)}
+            onBlur={onBuscarTelefone}
+            placeholder="(35) 99999-9999"
+            className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
+            autoFocus
+          />
+          {buscando && <p className="text-xs text-slate-400 mt-1.5">Verificando...</p>}
         </div>
       )}
 
@@ -576,14 +554,33 @@ function StepIdentificacao({
         </div>
       )}
 
-      {!clienteReconhecido && (
+      {jaECadastrado && !clienteReconhecido && telefone.replace(/\D/g, "").length >= 8 && !buscando && (
+        <p className="text-xs text-slate-400 mb-4">
+          Nao encontramos esse telefone. Confira o numero ou continue como novo cliente informando seu nome abaixo.
+        </p>
+      )}
+
+      {(!jaECadastrado || (jaECadastrado && !clienteReconhecido)) && (
         <div className="mb-4">
-          <label className="text-sm font-semibold mb-1.5 block">Seu telefone</label>
+          <label className="text-sm font-semibold mb-1.5 block">Seu nome</label>
+          <input
+            type="text"
+            value={nome}
+            onChange={(e) => onNomeChange(e.target.value)}
+            placeholder="Maria Silva"
+            className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
+            autoFocus={!jaECadastrado}
+          />
+        </div>
+      )}
+
+      {!jaECadastrado && (
+        <div className="mb-4">
+          <label className="text-sm font-semibold mb-1.5 block">Seu telefone (opcional)</label>
           <input
             type="text"
             value={telefone}
             onChange={(e) => onTelefoneChange(e.target.value)}
-            onBlur={onBuscarTelefone}
             placeholder="(35) 99999-9999"
             className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-blue-600 focus:outline-none"
           />
