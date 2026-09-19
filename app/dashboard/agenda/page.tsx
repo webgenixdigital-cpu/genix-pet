@@ -74,7 +74,8 @@ export default function AgendaPage() {
   const [modalReceberAgendamento, setModalReceberAgendamento] = useState<Agendamento | null>(null)
   const [formaPagamentoReceber, setFormaPagamentoReceber] = useState('Dinheiro')
   const [recebendoPagamento, setRecebendoPagamento] = useState(false)
-  const [tenantSlug, setTenantSlug] = useState('')
+    const [tenantSlug, setTenantSlug] = useState('')
+  const [pinMotorista, setPinMotorista] = useState('')
   const [transporteChecked, setTransporteChecked] = useState(false)
   const [enderecoColetaModal, setEnderecoColetaModal] = useState('')
   const [enderecoEntregaModal, setEnderecoEntregaModal] = useState('')
@@ -151,9 +152,9 @@ export default function AgendaPage() {
       return
     }
 
-    const { data: tenant } = await supabase
+        const { data: tenant } = await supabase
       .from('tenants')
-      .select('id, slug')
+      .select('id, slug, pin_motorista')
       .eq('email', user.email)
       .single()
 
@@ -162,6 +163,7 @@ export default function AgendaPage() {
       return
     }
     setTenantSlug(tenant.slug)
+    setPinMotorista(tenant.pin_motorista || '')
 
     const { inicio, fim } = calcularIntervalo()
 
@@ -709,45 +711,33 @@ export default function AgendaPage() {
 
         if (transportesDoDia.length === 0) return null
 
-                return (
-          <div className="bg-white border border-cyan-100 rounded-2xl p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-900">🚐 Transportes do dia ({transportesDoDia.length})</h3>
-              <div className="flex items-center gap-2 print:hidden">
-                {tenantSlug && (
-                  <a
-                    href={`/motorista/${tenantSlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    Acesso do motorista
-                  </a>
-                )}
-                <button
-                  onClick={() => window.print()}
-                  className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  🖨️ Imprimir
-                </button>
-              </div>
+                                return (
+          <div className="bg-white border border-cyan-100 rounded-2xl p-3 mb-6 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-900">🚐 {transportesDoDia.length} transporte{transportesDoDia.length > 1 ? 's' : ''} hoje</span>
+              {pinMotorista && (
+                <span className="text-xs bg-cyan-50 text-cyan-700 px-2.5 py-1 rounded-lg">
+                  PIN do motorista: <strong>{pinMotorista}</strong>
+                </span>
+              )}
             </div>
-            <div className="flex flex-col gap-2">
-              {transportesDoDia.map(t => (
-                <div key={t.id} className="border border-gray-100 rounded-lg p-3 flex items-center justify-between gap-3 text-sm">
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {new Date(t.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {t.pets?.nome} ({t.customers?.nome})
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Coleta: {t.endereco_coleta || 'não informado'}
-                    </p>
-                    {t.endereco_entrega && t.endereco_entrega !== t.endereco_coleta && (
-                      <p className="text-xs text-gray-500">Entrega: {t.endereco_entrega}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center gap-2 print:hidden">
+              {tenantSlug && (
+                <a
+                  href={`/motorista/${tenantSlug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Acesso do motorista
+                </a>
+              )}
+              <button
+                onClick={() => window.print()}
+                className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                🖨️ Imprimir
+              </button>
             </div>
           </div>
         )
