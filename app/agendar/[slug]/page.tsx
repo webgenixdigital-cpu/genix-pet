@@ -769,10 +769,11 @@ export default function AgendarPage() {
       ? `${ruaColeta}, ${numeroColeta}${bairroColeta ? ', ' + bairroColeta : ''}, ${cidadeColeta} - ${ufColeta}`
       : ''
 
-    let horarioAcumuladoMs = 0
+        let horarioAcumuladoMs = 0
     const agendamentosCriadosIds: string[] = []
     let erroCriacao = ''
     let primeiroPetNome = ''
+    const resumoPetsParaNotificacao: { nome: string; servicos: string }[] = []
 
     for (const pet of petsConfirmados) {
       let petId = pet.petIdExistente
@@ -810,10 +811,11 @@ export default function AgendarPage() {
           .eq('id', petId)
       }
 
-            if (!primeiroPetNome) primeiroPetNome = pet.nome
+                 if (!primeiroPetNome) primeiroPetNome = pet.nome
 
       const { selecionados, total, duracao } = resumoPet(pet)
       const nomesServicos = selecionados.map(i => i.nome).join(' + ')
+      resumoPetsParaNotificacao.push({ nome: pet.nome, servicos: nomesServicos || 'Servico nao especificado' })
       const duracaoMs = (duracao || 60) * 60000
 
       const inicio = new Date(new Date(`${dataSelecionada}T${horarioSelecionado}:00`).getTime() + horarioAcumuladoMs)
@@ -1015,7 +1017,7 @@ export default function AgendarPage() {
       return
     }
 
-    fetch('/api/notificar/recebido', {
+        fetch('/api/notificar/recebido', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1025,6 +1027,11 @@ export default function AgendarPage() {
         servico: `${petsConfirmados.length} pet(s)`,
         data: new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR'),
         horario: horarioSelecionado,
+        pets: resumoPetsParaNotificacao,
+        formaPagamento: formaPagamento === 'pix' ? 'Pix' : 'Presencial',
+        precisaTransporte,
+        enderecoColeta: precisaTransporte ? enderecoColetaFinal : null,
+        transporteIdaVolta: precisaTransporte ? transporteIdaVolta : false,
       }),
     }).catch(() => {})
 
