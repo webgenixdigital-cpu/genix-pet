@@ -136,12 +136,13 @@ export default function PacotesPage() {
         .maybeSingle()
 
       setPrecoUnitario(data ? Number(data.preco) : null)
-    } else if (usarRaca === false) {
+        } else if (usarRaca === false) {
       const { data: item } = await supabase
         .from('catalogo_porte_itens')
         .select('id')
         .eq('tenant_id', tenantId)
         .eq('eh_banho_base', true)
+        .contains('pelagens', [pelagemSelecionada])
         .maybeSingle()
 
       if (item) {
@@ -153,16 +154,18 @@ export default function PacotesPage() {
           .maybeSingle()
 
         setPrecoUnitario(precoData ? Number(precoData.preco) : null)
+      } else {
+        setPrecoUnitario(null)
       }
     }
 
     setBuscandoPreco(false)
   }
 
-  useEffect(() => {
+    useEffect(() => {
     if (usarRaca === true && racaSelecionadaId) buscarPrecoBanhoBase()
     if (usarRaca === false) buscarPrecoBanhoBase()
-  }, [usarRaca, racaSelecionadaId, porteSelecionado])
+  }, [usarRaca, racaSelecionadaId, porteSelecionado, pelagemSelecionada])
 
   const precoBase = precoUnitario !== null ? precoUnitario * parseInt(quantidadeBanhos || '0') : null
 

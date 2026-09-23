@@ -138,15 +138,16 @@ export default function ImportarClientesPage() {
 
         let petId: string | null = null
 
-        if (linha.pet_nome) {
+                if (linha.pet_nome) {
           const { data: novoPet, error: erroPet } = await supabase
             .from('pets')
             .insert({
               tenant_id: tenant.id,
               customer_id: clienteId,
               nome: linha.pet_nome,
-              especie: linha.pet_especie,
-              porte: linha.pet_porte,
+              especie: linha.pet_especie || 'cachorro',
+              porte: linha.pet_porte || 'medio',
+              pelagem: 'curta',
             })
             .select('id')
             .single()
