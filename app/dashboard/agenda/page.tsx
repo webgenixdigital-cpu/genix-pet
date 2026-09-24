@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 
 type Agendamento = {
@@ -77,6 +77,8 @@ export default function AgendaPage() {
     const [tenantSlug, setTenantSlug] = useState('')
   const [pinMotorista, setPinMotorista] = useState('')
   const [transporteChecked, setTransporteChecked] = useState(false)
+  const [menuTransporteAberto, setMenuTransporteAberto] = useState(false)
+  const [imprimindoTransportes, setImprimindoTransportes] = useState(false)
   const [enderecoColetaModal, setEnderecoColetaModal] = useState('')
   const [enderecoEntregaModal, setEnderecoEntregaModal] = useState('')
   const [salvandoTransporteModal, setSalvandoTransporteModal] = useState(false)
@@ -618,21 +620,103 @@ export default function AgendaPage() {
     return dias
   }
 
-  function irParaDia(dia: string) {
+    function irParaDia(dia: string) {
     setDataFiltro(dia)
     setPeriodoFiltro('dia')
   }
 
+  const transportesDoDia = useMemo(() => {
+    return agendamentos
+      .filter(a => a.precisa_transporte && a.status !== 'cancelado' && a.status !== 'faltou' && formatarDataISO(new Date(a.inicio)) === dataFiltro)
+      .sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime())
+  }, [agendamentos, dataFiltro])
+
+  function imprimirListaTransportes() {
+    setMenuTransporteAberto(false)
+    setImprimindoTransportes(true)
+    setTimeout(() => {
+      window.print()
+      setImprimindoTransportes(false)
+    }, 50)
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Agenda</h2>
           <p className="text-sm text-gray-500 mt-0.5">Fluxo de trabalho do dia</p>
         </div>
-                <a href={`/dashboard/agenda/novo?data=${dataFiltro}`} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
-          + Novo agendamento
-        </a>
+        <div className="flex items-center gap-2 print:hidden">
+          {transportesDoDia.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setMenuTransporteAberto(v => !v)}
+                className="bg-cyan-50 text-cyan-700 text-sm px-3 py-2 rounded-lg hover:bg-cyan-100 transition-colors whitespace-nowrap"
+              >
+                🚐 {transportesDoDia.length}
+              </button>
+              {menuTransporteAberto && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuTransporteAberto(false)} />
+                  <div className="absolute right-0 mt-1 bg-white border border-gray-100 rounded-lg shadow-lg py-1 z-20 whitespace-nowrap">
+                    {tenantSlug && (
+                      <a
+                        href={`/motorista/${tenantSlug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Acesso do motorista
+                      </a>
+                    )}
+                    <button
+                      onClick={imprimirListaTransportes}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      🖨️ Imprimir lista de transportes
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <a href={`/dashboard/agenda/novo?data=${dataFiltro}`} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+            + Novo agendamento
+          </a>
+        </div>
+      </div>
+
+      {imprimindoTransportes && (
+        <style>{`
+          @media print {
+            body * { visibility: hidden; }
+            #area-transportes-print, #area-transportes-print * { visibility: visible; }
+            #area-transportes-print {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              padding: 10mm;
+              font-size: 12px;
+              line-height: 1.5;
+            }
+          }
+        `}</style>
+      )}
+
+      <div id="area-transportes-print" className="hidden print:block">
+        <h2 style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '10px' }}>
+          Transportes do dia — {new Date(dataFiltro + 'T00:00:00').toLocaleDateString('pt-BR')}
+        </h2>
+        {transportesDoDia.map(t => (
+          <div key={t.id} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #ddd' }}>
+            <p style={{ fontWeight: 'bold' }}>
+              {new Date(t.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {t.pets?.nome} ({t.customers?.nome})
+            </p>
+            <p>Endereco: {t.endereco_coleta || 'nao informado'}</p>
+          </div>
+        ))}
       </div>
 
       <div className="flex items-center gap-2 mb-4">
@@ -704,46 +788,7 @@ export default function AgendaPage() {
         </button>
       )}
 
-      {!carregando && periodoFiltro === 'dia' && (() => {
-        const transportesDoDia = agendamentos
-          .filter(a => a.precisa_transporte && a.status !== 'cancelado' && a.status !== 'faltou')
-          .sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime())
-
-        if (transportesDoDia.length === 0) return null
-
-                                return (
-          <div className="bg-white border border-cyan-100 rounded-2xl p-3 mb-6 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-900">🚐 {transportesDoDia.length} transporte{transportesDoDia.length > 1 ? 's' : ''} hoje</span>
-              {pinMotorista && (
-                <span className="text-xs bg-cyan-50 text-cyan-700 px-2.5 py-1 rounded-lg">
-                  PIN do motorista: <strong>{pinMotorista}</strong>
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 print:hidden">
-              {tenantSlug && (
-                <a
-                  href={`/motorista/${tenantSlug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  Acesso do motorista
-                </a>
-              )}
-              <button
-                onClick={() => window.print()}
-                className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                🖨️ Imprimir
-              </button>
-            </div>
-          </div>
-        )
-      })()}
-
-                  {carregando ? (
+                       {carregando ? (
         <p className="text-sm text-gray-400">Carregando...</p>
             ) : periodoFiltro === 'semana' ? (
         <div className="overflow-x-auto pb-2">
